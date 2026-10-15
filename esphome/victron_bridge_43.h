@@ -41,7 +41,8 @@ inline std::string encode64(const std::string &text) {
   return out;
 }
 
-// DE/EN: return true only for a syntactically valid XX:XX:XX:XX:XX:XX MAC.
+// DE: Nur gueltig formatierte XX:XX:XX:XX:XX:XX-MAC-Adressen zulassen.
+// EN: Only accept syntactically valid XX:XX:XX:XX:XX:XX MACs.
 inline bool valid_mac(const std::string &mac) {
   if (mac.size() != 17) return false;
   for (size_t i=0;i<17;i++) {
@@ -52,7 +53,8 @@ inline bool valid_mac(const std::string &mac) {
   return true;
 }
 
-// Documented in docs/TRANSMISSION_EN.md / docs/TRANSMISSION_DE.md.
+// DE: Weiterleitung dokumentiert in docs/TRANSMISSION.de.md.
+// EN: Forwarding documented in docs/TRANSMISSION.en.md.
 constexpr uint32_t kIdenticalRefreshMs = 15000;
 inline bool should_forward(bool have_success, const std::string &last_so,
                            const std::string &last_nw, const Request &req,

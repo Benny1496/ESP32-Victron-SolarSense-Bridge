@@ -1,10 +1,11 @@
-# ILLUSTRATIVE INPUT MODEL ONLY. NOT A VALID ESPHOME TOP-LEVEL COMPONENT.
-# Copying this YAML directly into ESPHome will not work.
-# Use only synthetic example MACs; users must supply their own privately.
+# DE: NUR eine schematische Eingabevorlage. KEIN gueltiges ESPHome-Hauptmodul!
+# DE: Nicht direkt in ESPHome kopieren. MACs sind rein kuenstliche Beispiele.
+# EN: ILLUSTRATIVE INPUT MODEL ONLY. NOT A VALID ESPHOME TOP-LEVEL COMPONENT.
+# EN: Do not paste into ESPHome. Use only synthetic MACs; keep real MACs private.
 sensors:
-  - name: "Roof A"
+  - name: "Dach A / Roof A"
     mac_address: "02:00:00:00:00:01"
-  - name: "Roof B"
+  - name: "Dach B / Roof B"
     mac_address: "02:00:00:00:00:02"
-  - name: "Roof C"
+  - name: "Dach C / Roof C"
     mac_address: "02:00:00:00:00:03"

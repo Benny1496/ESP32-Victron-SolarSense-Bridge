@@ -1,9 +1,12 @@
 #pragma once
 
-// Independent implementation of the publicly documented SolarSense BLE fields.
-// Input is the Victron manufacturer-data PAYLOAD, not the full BLE advertisement.
-// Reference: https://github.com/victronenergy/dbus-ble-sensors
-// No Victron source code is copied here. See docs/SOURCES.md.
+// DE: Eigenstaendige Implementierung der oeffentlich beschriebenen SolarSense-BLE-Felder.
+// DE: Eingabe ist die Victron-Herstellerdaten-Nutzlast, NICHT das komplette BLE-Paket.
+// EN: Independent implementation of publicly documented SolarSense BLE data fields.
+// EN: Input is the manufacturer-data payload, NOT the complete BLE advertisement.
+// DE/EN: Kein Victron-Quellcode kopiert / no Victron source copied.
+// Quellen / Sources: https://github.com/victronenergy/dbus-ble-sensors
+// Dokumentation / Documentation: docs/SOURCES.de.md and docs/SOURCES.md.
 
 #include <cstddef>
 #include <cstdint>
@@ -38,7 +41,8 @@ inline DecodeResult decode_manufacturer_payload(const std::uint8_t* bytes,
   if (bytes == nullptr) return DecodeResult::null_buffer;
   if (length < 22) return DecodeResult::too_short;
 
-  // SolarSense 750 plaintext instant-readout record (0xFF01).
+  // DE: SolarSense-750-Klartextdatensatz fuer Momentanwerte (0xFF01).
+  // EN: SolarSense 750 plaintext instant-readout record (0xFF01).
   if (bytes[0] != 0x10 || bytes[4] != 0xFF || bytes[7] != 0x01) {
     return DecodeResult::unsupported_record;
   }

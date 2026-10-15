@@ -18,5 +18,5 @@ int main() {
  assert(valid_mac("02:00:00:00:00:01"));
  assert(!valid_mac("NOT_A_MAC"));
  assert(encode64("remoteconsole:")=="cmVtb3RlY29uc29sZTo=");
- std::cout<<"PASS: duplicate/refresh/wraparound, MAC and pairing-bootstrap checks\\n";
+ std::cout<<"BESTANDEN / PASS: Doppelpakete / duplicates, Refresh, Ueberlauf / wraparound, MAC, Kopplung / pairing\\n";
 }

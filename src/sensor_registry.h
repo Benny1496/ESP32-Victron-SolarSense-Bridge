@@ -1,8 +1,12 @@
 #pragma once
 
-// Prototype: configurable count of sensors, no hardcoded roof sides.
-// This class is NOT thread-safe; update it only from one ESPHome/main-loop context.
-// Transport to GX and Home Assistant discovery are not implemented here.
+// DE: Frueher Prototyp mit variabler Sensoranzahl, ohne feste Dachseiten.
+// DE: NICHT threadsicher; nur in einem ESPHome-/Hauptschleifen-Kontext verwenden.
+// DE: GX-Weiterleitung und automatische HA-Entitaeten sind hier nicht implementiert.
+// EN: Older prototype supporting a configurable number of sensors, without fixed roof sides.
+// EN: NOT thread-safe; update from one ESPHome/main-loop context only.
+// EN: GX forwarding and Home Assistant discovery are not implemented here.
+// Aktuelle Vorlage / current install template: esphome/solarsense-bridge.yaml.
 
 #include "solarsense_decoder.h"
 #include <cctype>
@@ -35,8 +39,10 @@ class SensorRegistry {
     return true;
   }
 
-  // Manufacturer ID and sensor MAC are checked before a record is stored.
-  // Full original advertising bytes are preserved for later GX forwarding.
+  // DE: Herstellerkennung und Sensor-MAC vor dem Speichern pruefen.
+  // DE: Originale BLE-Werbedaten fuer eine spaetere GX-Weiterleitung behalten.
+  // EN: Check manufacturer ID and MAC before storing the record.
+  // EN: Preserve original advertisement bytes for potential GX forwarding.
   bool accept(const std::string& address, std::uint16_t manufacturer_id,
               const std::uint8_t* manufacturer_bytes, std::size_t manufacturer_length,
               const std::uint8_t* advertisement, std::size_t advertisement_length,

@@ -9,7 +9,8 @@
 using solarsense::DecodeResult;
 using solarsense::Reading;
 
-// Synthetic, deterministic test packet. NOT captured from a real user's sensor.
+// DE: Kuenstliches, reproduzierbares Testpaket; KEINE privaten Sensordaten.
+// EN: Synthetic, deterministic packet; NOT captured from a real user's sensor.
 std::array<std::uint8_t, 23> sample() {
   std::array<std::uint8_t, 23> b{};
   b[0] = 0x10; b[4] = 0xFF; b[7] = 0x01; b[12] = 0xFF;
@@ -41,10 +42,11 @@ int main() {
   auto invalid_header = data;
   invalid_header[4] = 0;
   assert(solarsense::decode_manufacturer_payload(invalid_header.data(), invalid_header.size(), r) == DecodeResult::unsupported_record);
-  assert(!r.irradiance_w_m2.valid);  // clear stale data on error
+  assert(!r.irradiance_w_m2.valid);  // DE: Alte Werte bei Fehler loeschen / EN: Clear stale data on error
 
   auto absent = data;
-  // Sentinel values indicate missing data and must NOT be published as normal measurements.
+  // DE: Platzhalterwerte bedeuten 'keine Daten' und sind keine gueltigen Messwerte.
+  // EN: Sentinel values mean missing data and must NOT appear as normal measurements.
   absent[13] = 0xFF; absent[14] = 0xFF; absent[15] = 0xFF;
   absent[16] = 0xFF; absent[17] = 0xFF;
   absent[18] = 0xFF; absent[19] = 0xFF;
