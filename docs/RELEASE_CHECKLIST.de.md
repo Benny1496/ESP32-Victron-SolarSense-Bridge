@@ -12,11 +12,11 @@
 - [x] **Vollständige Firmware in isolierter GitHub Actions-Umgebung erfolgreich kompiliert** (synthetische Testkonfiguration; kein Gerät geflasht).
 - [x] Aktuelle GitHub-Dateien manuell prüfen und automatische Datenschutzprüfung für künftige Commits ergänzen.
 
-## Noch vor öffentlicher Freigabe notwendig
+## Veröffentlichung abgeschlossen / weiterhin zu beachten
 
-- [ ] Geprüfte Dateien **ohne alte Commits, Branches und Alpha-PR** in ein neues leeres Repository übernehmen; alten Entwicklungsstand privat behalten.
-- [ ] Den **genau dort angelegten Anfangsstand** nochmals prüfen und die GitHub-Prüfläufe kontrollieren.
-- [ ] Repository-Inhaber bestätigt die Veröffentlichung und stellt ausschließlich das saubere Repository auf `Public`.
+- [x] Geprüfte Dateien **ohne alte Alpha-Commits, Branches und Pull Requests** in ein neues Repository mit frischem Verlauf übernommen; das Entwicklungsarchiv bleibt privat.
+- [x] Den neuen GitHub-Dateibaum mit dem geprüften Quellbestand abgeglichen; GitHub-Actions-Datenschutztest, C++-Tests und vollständige Firmware-Kompilierung bestanden.
+- [x] Repository-Inhaber hat ausschließlich das bereinigte Repository auf **Public** gestellt; das Entwicklungsarchiv bleibt **Private**.
 
 ## Als dokumentierte Community-Aufgaben offen (keine Voraussetzung für Quellcodeveröffentlichung)
 
@@ -25,4 +25,4 @@
 - [ ] Erweiterung auf mehr als zwei Sensoren entwickeln und praktisch testen.
 - [ ] Bei künftiger Übernahme weiterer Fremdcodeanteile Lizenz-/Copyright-/NOTICE-Pflichten neu prüfen.
 
-**Wichtig:** Die vom Inhaber unverändert gewünschte englische `README.md` beschreibt den älteren Entwicklungsprototyp. Für die aktuelle Fassung siehe [README.de.md](../README.de.md) und [STATUS.de.md](STATUS.de.md). [Sicherer Veröffentlichungsweg](PUBLISHING.de.md).
+**Wichtig:** Die Startseite [README.md](../README.md) wurde auf Wunsch des Projektinhabers später auf **Deutsch und Englisch** umgestellt. Die getrennten Sprachfassungen stehen in [README.de.md](../README.de.md) und [README.en.md](../README.en.md). [Sicherer Veröffentlichungsweg](PUBLISHING.de.md).

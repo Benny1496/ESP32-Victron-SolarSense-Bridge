@@ -12,11 +12,11 @@
 - [x] **Successfully compile complete firmware in isolated GitHub Actions** (synthetic test configuration; no hardware flashed).
 - [x] Manually inspect current tracked files and add automated privacy checks for future commits.
 
-## Required before public visibility
+## Publication completed / continuing precautions
 
-- [ ] Transfer the reviewed files to a **new empty repository without old commits, branches and closed Alpha PR references**; keep the original development repo private.
-- [ ] Recheck the **exact new initial commit** and GitHub Actions results in that clean repository.
-- [ ] Obtain the owner's specific go-ahead and set **only the clean repository** to `Public`.
+- [x] Transferred audited files to a **new repository with clean history**, without old Alpha commits, branches or PRs. Original development repo remains private.
+- [x] Compared all public files to the audited source; the new repository passed GitHub Actions privacy, C++ and complete firmware build checks.
+- [x] Repository owner set **only this clean repository** to **Public**; private archive stays private.
 
 ## Transparent community follow-ups (not blockers for source publication)
 
@@ -25,4 +25,4 @@
 - [ ] Implement and test additional sensors beyond the two in the current configuration.
 - [ ] Review source provenance and required copyright/license/NOTICE materials whenever additional third-party code is copied.
 
-**Note:** At the owner's request the original English `README.md` remains unchanged and describes the older development prototype. For the current publication source see [README.de.md](../README.de.md) and [STATUS.en.md](STATUS.en.md). [Clean publication process](PUBLISHING.en.md).
+**Note:** The repository owner later requested a **German-English** homepage; [README.md](../README.md) now introduces both languages. Separate versions: [README.de.md](../README.de.md) and [README.en.md](../README.en.md). [Clean publication process](PUBLISHING.en.md).

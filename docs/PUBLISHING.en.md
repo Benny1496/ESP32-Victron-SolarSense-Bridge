@@ -1,21 +1,26 @@
 # Publication and privacy (English)
 
+[Deutsch](PUBLISHING.de.md) · [English](PUBLISHING.en.md) · [Home](../README.md)
+
+## Current public repository
+
+[ESP32-Victron-SolarSense-Bridge](https://github.com/Benny1496/ESP32-Victron-SolarSense-Bridge) is now **public**. It contains the reviewed project source with a **fresh Git history**. The earlier private development repository, abandoned Alpha branch and closed PR remain in a **separate private archive**.
+
+Public files use each user's own private `secrets.yaml` and independently obtained trusted TLS certificate. **No original site's credentials, device addresses, or private certificates** are included.
+
 ## What has been checked
 
-The current `main` source was examined for real private LAN IPs, hardware MACs, private keys and known production configuration values. ESPHome configuration validation and isolated C++ tests also run in GitHub Actions. `scripts/check_publication_privacy.py` checks future commits for common accidental disclosures. **This heuristic is not a guarantee**: unknown secret formats may escape detection.
+- Source files were inspected for known internal network addresses, genuine hardware MACs and private keys. The automatic [privacy guard](../scripts/check_publication_privacy.py) supplements manual review but **cannot guarantee** that every possible secret format will be recognized.
+- The fresh public Git history contains **no old Alpha commits or pull requests**.
+- C++ unit tests, ESPHome 2026.9.1 configuration validation and **complete firmware compilation** passed using synthetic CI values.
+- The published template is not identical to the private live-tested stage 4.3.1: certificate-verified TLS and 15-second duplicate refresh are new and have **not yet been jointly hardware-tested**.
 
-The original live stage 4.3.1 firmware is **not distributed unchanged**. Publishable files under `esphome/` use private `secrets.yaml` configuration and a user-supplied trusted TLS certificate. Two SolarSense sensors are the documented reference. Certificate-verified HTTPS and the 15-second duplicate refresh are new changes **not yet tested together on the production hardware**.
+## For future contributions
 
-## Why not simply select Public?
+1. German **or** English contributions are welcome. Please update **both language versions** whenever user-facing behavior changes.
+2. Never commit local `secrets.yaml`, private keys, tokens, MAC addresses, internal IPs or raw logs.
+3. Run automatic checks before a pull request; distinguish real hardware testing from untested assumptions.
+4. A GitHub Actions source-only export contains currently tracked source files, not the old private repository's history.
+5. Review author rights and license notices for all reused third-party code: [Credits](CREDITS.en.md).
 
-The existing private Git history contains the abandoned Alpha branch and a closed pull request. Older revisions mention owner-specific device/testing context. Deleting files or branches does not necessarily remove prior commits and pull-request references. **Do not make the existing history public directly.**
-
-## Clean publication path
-
-1. Export the current `main` as **working-tree source files without the .git folder or any history**, e.g. GitHub's Download ZIP followed by extraction. Never upload the original unsanitized 4.3.1 ZIP.
-2. Create a **new empty GitHub repository** using the intended public project name. **Do not fork the old repository, import Git history, or include the Alpha branch**. Retain the old repository as a private archive.
-3. Copy the reviewed source files as a clean initial commit. Preserve the English `README.md` unchanged as requested, with `README.de.md` providing a German entry point.
-4. Run privacy checks and GitHub Actions in the fresh repository. Describe the source honestly as a community preview with outstanding hardware verification.
-5. The repository owner decides separately when to change its visibility to `Public`. Never include personal credentials, local certificates or firmware dumps.
-
-**Note:** A clean history does not eliminate the need to review published file contents. Attribution and license information are in [CREDITS.en.md](CREDITS.en.md) and [LICENSE.en.md](LICENSE.en.md). An isolated compilation does not prove operation with a real Cerbo GX.
+This page documents a **completed public launch**. It is not an instruction to publish the private archive.

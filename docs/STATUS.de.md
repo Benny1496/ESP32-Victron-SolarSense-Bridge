@@ -10,6 +10,6 @@ Stand: 15. Oktober 2026. Ausgangspunkt ist die **produktive Stufe 4.3.1**.
 
 **Nicht als getestet behaupten:** Die neue TLS-/Duplikat-Kombination wurde nicht am produktiven ESP32 mit echtem Cerbo GX geprüft. Offen sind Praxistests von Zertifikatswechsel, Pairing, Fehler-/Wiederholungsfällen, längerem Betrieb sowie die Reichweite von mehr als zwei Sensoren. Die Vorlage konfiguriert tatsächlich **zwei** Sensoren; mehr sind als Community-Weiterentwicklung willkommen.
 
-**Veröffentlichung:** Die aktuellen Dateien sind bereinigt, doch der alte Alpha-Branch und der geschlossene PR existieren noch in der privaten Repository-Historie. Deshalb soll der veröffentlichte Stand als **neues Repository mit frischem Git-Verlauf** erstellt werden. Anleitung: [PUBLISHING.de.md](PUBLISHING.de.md).
+**Veröffentlichung:** Das aktuelle Repository ist **öffentlich** und wurde mit einem neuen Git-Verlauf angelegt. Der frühere Alpha-Branch und der alte Pull Request befinden sich ausschließlich im **privaten Entwicklungsarchiv**, nicht in diesem Repository. Die Startseite und die Projektdokumentation sind in **Deutsch und Englisch** verfügbar. Hintergrund: [PUBLISHING.de.md](PUBLISHING.de.md).
 
 **Community-Quellcode-Vorschau, keine produktiv zertifizierte Firmware und keine juristische Gewährleistung.**
