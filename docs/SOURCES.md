@@ -11,4 +11,4 @@ Detailed upstream author credits, provenance, licensing boundaries, and third-pa
 - **`tests/test_duplicate.cpp`:** isolated forwarding and periodic-refresh decision test.
 - **`docs/`:** guides in German and English. The [bilingual homepage](../README.md) summarizes the current source.
 
-The original English-only prototype `README.md` was replaced with an up-to-date **German-English** homepage on 15 October 2026. The full firmware compiled successfully in GitHub Actions; the new TLS and duplicate-suppression features have not yet been integration-tested together on actual Cerbo hardware.
+The original English-only prototype `README.md` was replaced with an up-to-date **German-English** homepage on 15 October 2026. The original text is preserved under [PROTOTYPE.en.md](PROTOTYPE.en.md), with a German translation at [PROTOTYPE.de.md](PROTOTYPE.de.md). The full firmware compiled successfully in GitHub Actions; the new TLS and duplicate-suppression features have not yet been integration-tested together on actual Cerbo hardware.

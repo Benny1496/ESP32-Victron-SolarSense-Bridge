@@ -45,6 +45,7 @@
 | Veröffentlichung | [Veröffentlichung](docs/PUBLISHING.de.md) | [Publishing](docs/PUBLISHING.en.md) |
 | Prüf-Checkliste | [Checkliste](docs/RELEASE_CHECKLIST.de.md) | [Checklist](docs/RELEASE_CHECKLIST.md) |
 | Dokumentenindex | [Übersicht](docs/README.md#deutsch) | [Index](docs/README.md#english) |
+| Frühere Sensor-Prototypen / Older prototypes | [Historisch](docs/PROTOTYPE.de.md) | [Historical](docs/PROTOTYPE.en.md) |
 
 **Lizenz:** Eigene Projektanteile unter GPL-3.0-only; fremde Rechte und Lizenzhinweise beachten. Siehe [LICENSE](LICENSE) und [Quellenhinweise](docs/CREDITS.de.md). Unabhängiges Community-Projekt, nicht offiziell von Victron, ESPHome oder Shelly.
 

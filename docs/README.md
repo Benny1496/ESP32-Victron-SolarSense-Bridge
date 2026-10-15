@@ -12,6 +12,7 @@ Die Bridge basiert auf einer funktionierenden privaten 4.3.1 für **zwei** Solar
 3. [Entwicklungs- und Teststand](STATUS.de.md) · [Release-Checkliste](RELEASE_CHECKLIST.de.md)
 4. [Quellen und Autoren](CREDITS.de.md) · [Quellenindex](SOURCES.de.md) · [Lizenzhinweis](LICENSE.de.md)
 5. [Mitmachen](CONTRIBUTING.de.md) · [Veröffentlichung und Git-Historie](PUBLISHING.de.md)
+6. [Ursprünglicher Multi-Sensor-Prototyp (historisch)](PROTOTYPE.de.md)
 
 <a id="english"></a>
 ## 🇬🇧 English
@@ -23,5 +24,6 @@ The bridge is based on a privately operating 4.3.1 setup for **two** SolarSense 
 3. [Development and test status](STATUS.en.md) · [Release checklist](RELEASE_CHECKLIST.md)
 4. [Contributors and sources](CREDITS.en.md) · [Source index](SOURCES.md) · [License notes](LICENSE.en.md)
 5. [Contributing](CONTRIBUTING.en.md) · [Publishing and Git history](PUBLISHING.en.md)
+6. [Original multi-sensor prototype (historical)](PROTOTYPE.en.md)
 
 [Zurück zur Startseite / Back to home](../README.md)
