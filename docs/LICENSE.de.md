@@ -1,0 +1,3 @@
+# Lizenzhinweis (Deutsch)
+
+Die **maßgebliche** Lizenz der eigenen Quellcode-Anteile ist die unveränderte englische `LICENSE` (GNU GPL Version 3, **GPL-3.0-only**). Diese deutsche Erklärung dient nur zur Orientierung und ist **keine rechtsverbindliche Übersetzung**: Nutzung, Änderung und Weitergabe sind nach den Bedingungen der GPLv3 zulässig; bei Weitergabe müssen insbesondere die einschlägigen Urheber- und Lizenzhinweise sowie die GPL-Bedingungen eingehalten werden. Markenrechte und Rechte Dritter sind nicht automatisch eingeschlossen. Bitte die Herkunftshinweise in `docs/CREDITS.de.md` beachten.
