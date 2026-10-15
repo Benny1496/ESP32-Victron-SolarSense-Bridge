@@ -1,0 +1,19 @@
+# DE/EN: Keine Geheimnisse, lokale Zertifikate, Build- und Logdateien / no private config or build artifacts
+**/secrets.yaml
+**/certs/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/.esphome/
+**/.pio/
+**/build/
+**/*.bin
+**/*.elf
+**/*.map
+**/*.log
+**/*.bak
+**/*.tmp
+**/.env
+**/*credentials*
+**/*token*
+**/__pycache__/
