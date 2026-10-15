@@ -1,0 +1,10 @@
+# ILLUSTRATIVE INPUT MODEL ONLY. NOT A VALID ESPHOME TOP-LEVEL COMPONENT.
+# Copying this YAML directly into ESPHome will not work.
+# Use only synthetic example MACs; users must supply their own privately.
+sensors:
+  - name: "Roof A"
+    mac_address: "02:00:00:00:00:01"
+  - name: "Roof B"
+    mac_address: "02:00:00:00:00:02"
+  - name: "Roof C"
+    mac_address: "02:00:00:00:00:03"

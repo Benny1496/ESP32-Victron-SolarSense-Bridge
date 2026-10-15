@@ -1,0 +1,1116 @@
+substitutions:
+  name: esp32-solarsensor
+  friendly_name: esp32 SolarSensor
+  sensor_1_mac: !secret sensor_1_mac
+  sensor_2_mac: !secret sensor_2_mac
+  cerbo_gateway_mac: !secret cerbo_gateway_mac
+  cerbo_https_url: !secret cerbo_https_url
+  cerbo_pairing_device_id: !secret cerbo_pairing_device_id
+
+packages:
+  esphome.bluetooth-proxy: "github://esphome/bluetooth-proxies/esp32-generic/esp32-generic.yaml@main"
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+  includes:
+    - victron_bridge_43.h
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          if (!victron_bridge_43::bridge.start(id(victron_http),
+                  "${cerbo_https_url}", "${cerbo_gateway_mac}",
+                  "${sensor_1_mac}", "${sensor_2_mac}"))
+            ESP_LOGE("victron_bridge", "HTTPS-Hintergrundaufgabe konnte nicht starten");
+
+api:
+  encryption:
+    key: !secret esphome_api_encryption_key
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+logger:
+  baud_rate: 0
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+globals:
+  - id: solarsense_suedost_last_packet_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: solarsense_suedost_last_packet_timestamp
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: solarsense_suedost_last_sun_timestamp
+    type: uint32_t
+    restore_value: yes
+    update_interval: 1h
+    initial_value: '0'
+
+  - id: solarsense_nordwest_last_packet_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: solarsense_nordwest_last_packet_timestamp
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: solarsense_nordwest_last_sun_timestamp
+    type: uint32_t
+    restore_value: yes
+    update_interval: 1h
+    initial_value: '0'
+
+  # Victron device token in ESP32 NVS / Victron-Geraetetoken im ESP32-NVS.
+  # NVS is not an encrypted secret vault / NVS ist kein verschluesselter Geheimnisspeicher.
+  # Never log token values / Tokenwerte niemals protokollieren.
+  - id: victron_token_name
+    type: std::string
+    restore_value: yes
+    update_interval: 5s
+    max_restore_data_length: 120
+    initial_value: '""'
+
+  - id: victron_token_password
+    type: std::string
+    restore_value: yes
+    update_interval: 5s
+    max_restore_data_length: 120
+    initial_value: '""'
+
+  # Diagnostic counters reset on boot / Diagnosezaehler werden beim Neustart zurueckgesetzt.
+  - id: victron_bridge_success_count
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: victron_bridge_error_count
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+http_request:
+  id: victron_http
+  timeout: 3s
+  verify_ssl: true
+  follow_redirects: false
+  ca_certificate_path: !secret cerbo_ca_path
+
+button:
+  - platform: template
+    name: "Victron Bridge mit Cerbo koppeln"
+    entity_category: config
+    on_press:
+      - logger.log:
+          tag: victron_bridge
+          level: INFO
+          format: "Token-Anfrage an Cerbo gestartet (Kopplungsmodus muss aktiv sein)"
+      - http_request.post:
+          url: "${cerbo_https_url}"
+          request_headers:
+            Authorization: "Basic cmVtb3RlY29uc29sZTo="  # remoteconsole: mit leerem Passwort, nur im Pairing Mode
+            Content-Type: application/json
+          body: '{"generate_token":{"device_id":"${cerbo_pairing_device_id}"}}'
+          capture_response: true
+          max_response_buffer_size: 2048
+          on_response:
+            then:
+              - lambda: |-
+                  const int code = response->status_code;
+                  if (code < 200 || code >= 300) {
+                    ESP_LOGW("victron_bridge", "Token-Anmeldung nicht erfolgreich: HTTP %d; Kopplungsmodus pruefen", code);
+                    return;
+                  }
+                  bool saved = esphome::json::parse_json(body, [](JsonObject root) -> bool {
+                    if (!root["token_name"].is<const char *>() || !root["password"].is<const char *>())
+                      return false;
+                    std::string user = root["token_name"].as<std::string>();
+                    std::string pass = root["password"].as<std::string>();
+                    if (user.empty() || pass.empty() || user.size() > 120 || pass.size() > 120)
+                      return false;
+                    id(victron_token_name) = user;
+                    id(victron_token_password) = pass;
+                    return true;
+                  });
+                  if (saved) {
+                    ESP_LOGI("victron_bridge", "Kopplung erfolgreich: Zugangsdaten gespeichert (werden nicht ausgegeben)");
+                    id(victron_bridge_pair_status).publish_state("Token gespeichert (Bridge per Schalter steuerbar)");
+                  } else {
+                    ESP_LOGW("victron_bridge", "HTTP %d, aber Token-Antwort ungueltig oder zu lang", code);
+                  }
+          on_error:
+            then:
+              - logger.log:
+                  level: WARN
+                  tag: victron_bridge
+                  format: "Token-Anfrage fehlgeschlagen: WLAN / HTTPS / Timeout pruefen"
+  - platform: template
+    name: "Victron Bridge BLE-Pakete jetzt senden"
+    entity_category: diagnostic
+    on_press:
+      - script.execute: victron_bridge_send
+  - platform: template
+    name: "Victron Bridge Cerbo HTTPS Verbindung testen"
+    entity_category: diagnostic
+    on_press:
+      - http_request.get:
+          url: "${cerbo_https_url}"
+          on_response:
+            then:
+              - lambda: |-
+                  ESP_LOGI("victron_bridge", "Cerbo antwortet auf HTTPS: HTTP %d", response->status_code);
+          on_error:
+            then:
+              - logger.log:
+                  level: WARN
+                  tag: victron_bridge
+                  format: "Cerbo HTTPS nicht erreichbar / TLS-Fehler"
+  - platform: restart
+    name: "ESP32 SolarSensor neu starten"
+    entity_category: diagnostic
+
+# Stufe 4.3: HTTPS im Hintergrund, 3s, startet AUS.
+switch:
+  - platform: template
+    id: victron_bridge_enabled
+    name: "Victron Bridge Übertragung aktiv"
+    icon: "mdi:bluetooth-transfer"
+    entity_category: config
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+
+# Uses the two existing 31-byte advertisement text sensors / Verwendet zwei vorhandene ADV-Textsensoren.
+# One HTTPS request at a time; changed advertisements every 3 s, unchanged periodically refreshed.
+# Maximal eine HTTPS-Anfrage gleichzeitig; geaenderte Daten alle 3 s, unveraenderte regelmaessig.
+script:
+  - id: victron_bridge_send
+    mode: single
+    then:
+      - lambda: |-
+          if (id(victron_token_name).empty() || id(victron_token_password).empty() ||
+              id(victron_so_adv_hex).state.empty() || id(victron_nw_adv_hex).state.empty() ||
+              millis() - id(solarsense_suedost_last_packet_ms) >= 120000 ||
+              millis() - id(solarsense_nordwest_last_packet_ms) >= 120000) {
+            id(victron_bridge_post_status).publish_state("Keine frischen BLE-Daten / Token fehlt");
+            return;
+          }
+          float so_rssi=id(solarsense_suedost_rssi).state;
+          float nw_rssi=id(solarsense_nordwest_rssi).state;
+          if (isnan(so_rssi) || isnan(nw_rssi)) return;
+          victron_bridge_43::bridge.submit(
+            id(victron_token_name), id(victron_token_password),
+            id(victron_so_adv_hex).state, id(victron_nw_adv_hex).state,
+            static_cast<int>(so_rssi), static_cast<int>(nw_rssi));
+
+interval:
+  - interval: 3s
+    then:
+      - if:
+          condition:
+            switch.is_on: victron_bridge_enabled
+          then:
+            - script.execute: victron_bridge_send
+  - interval: 500ms
+    then:
+      - lambda: |-
+          victron_bridge_43::Result result{};
+          while (victron_bridge_43::bridge.get_result(result)) {
+            if(result.status >= 200 && result.status < 300) {
+              id(victron_bridge_success_count)++;
+              id(victron_bridge_post_status).publish_state("OK HTTP " + std::to_string(result.status));
+              if(id(victron_bridge_success_count)%20==0)
+                ESP_LOGI("victron_bridge","HTTPS OK: %u Anfragen, letzte %u ms",
+                         (unsigned)id(victron_bridge_success_count),(unsigned)result.elapsed_ms);
+            } else {
+              id(victron_bridge_error_count)++;
+              id(victron_bridge_post_status).publish_state("Fehler HTTP " + std::to_string(result.status));
+              ESP_LOGW("victron_bridge","HTTPS HTTP %d nach %u ms",result.status,(unsigned)result.elapsed_ms);
+            }
+            id(victron_bridge_ok_counter).publish_state(id(victron_bridge_success_count));
+            id(victron_bridge_error_counter).publish_state(id(victron_bridge_error_count));
+          }
+
+sensor:
+  - platform: template
+    name: "Victron Bridge erfolgreiche Übertragungen"
+    id: victron_bridge_ok_counter
+    icon: "mdi:check-network-outline"
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    name: "Victron Bridge Übertragungsfehler"
+    id: victron_bridge_error_counter
+    icon: "mdi:alert-circle-outline"
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never
+
+
+  # =========================================================
+  # BLE Signalstärke der beiden SolarSense Sensoren
+  # =========================================================
+
+  - platform: ble_rssi
+    mac_address: ${sensor_1_mac}
+    name: "SolarSense Südost RSSI"
+    id: solarsense_suedost_rssi
+
+  - platform: ble_rssi
+    mac_address: ${sensor_2_mac}
+    name: "SolarSense Nordwest RSSI"
+    id: solarsense_nordwest_rssi
+
+
+  # =========================================================
+  # SÜDOST
+  # =========================================================
+
+  - platform: template
+    name: "SolarSense Südost Bestrahlungsstärke"
+    id: solarsense_suedost_irradiance
+    unit_of_measurement: "W/m²"
+    device_class: irradiance
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Südost Geschätzte Leistung"
+    id: solarsense_suedost_power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Südost Heutiger Ertrag"
+    id: solarsense_suedost_yield
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Südost Zelltemperatur"
+    id: solarsense_suedost_temperature
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+
+  # =========================================================
+  # NORDWEST
+  # =========================================================
+
+  - platform: template
+    name: "SolarSense Nordwest Bestrahlungsstärke"
+    id: solarsense_nordwest_irradiance
+    unit_of_measurement: "W/m²"
+    device_class: irradiance
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Nordwest Geschätzte Leistung"
+    id: solarsense_nordwest_power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Nordwest Heutiger Ertrag"
+    id: solarsense_nordwest_yield
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Nordwest Zelltemperatur"
+    id: solarsense_nordwest_temperature
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+
+  # =========================================================
+  # GESAMTWERTE
+  #
+  # Diese beiden Berechnungen liefen bisher in Home Assistant.
+  # Sie werden jetzt direkt auf dem ESP32 berechnet.
+  # =========================================================
+
+  - platform: template
+    name: "SolarSense geschätzte Gesamtleistung"
+    id: solarsense_gesamtleistung
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: "mdi:solar-power"
+    update_interval: 5s
+    lambda: |-
+      const float suedost = id(solarsense_suedost_power).state;
+      const float nordwest = id(solarsense_nordwest_power).state;
+
+      const bool suedost_gueltig = !isnan(suedost);
+      const bool nordwest_gueltig = !isnan(nordwest);
+
+      if (!suedost_gueltig && !nordwest_gueltig) {
+        return NAN;
+      }
+
+      float gesamt = 0.0f;
+
+      if (suedost_gueltig) {
+        gesamt += suedost;
+      }
+
+      if (nordwest_gueltig) {
+        gesamt += nordwest;
+      }
+
+      return gesamt;
+
+
+  - platform: template
+    name: "SolarSense heutiger Gesamtertrag"
+    id: solarsense_gesamtertrag
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 2
+    icon: "mdi:solar-power-variant"
+    update_interval: 5s
+    lambda: |-
+      const float suedost = id(solarsense_suedost_yield).state;
+      const float nordwest = id(solarsense_nordwest_yield).state;
+
+      const bool suedost_gueltig = !isnan(suedost);
+      const bool nordwest_gueltig = !isnan(nordwest);
+
+      if (!suedost_gueltig && !nordwest_gueltig) {
+        return NAN;
+      }
+
+      float gesamt = 0.0f;
+
+      if (suedost_gueltig) {
+        gesamt += suedost;
+      }
+
+      if (nordwest_gueltig) {
+        gesamt += nordwest;
+      }
+
+      return gesamt;
+
+
+  # =========================================================
+  # Empfangszeiten Südost
+  # =========================================================
+
+  - platform: template
+    name: "SolarSense Südost Minuten seit letztem Empfang"
+    id: solarsense_suedost_minutes_since_packet
+    unit_of_measurement: "min"
+    device_class: duration
+    state_class: measurement
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      if (id(solarsense_suedost_last_packet_timestamp) == 0) {
+        return NAN;
+      }
+
+      auto now = id(homeassistant_time).now();
+
+      if (!now.is_valid()) {
+        return NAN;
+      }
+
+      if (now.timestamp < id(solarsense_suedost_last_packet_timestamp)) {
+        return 0.0f;
+      }
+
+      return static_cast<float>(
+        now.timestamp - id(solarsense_suedost_last_packet_timestamp)
+      ) / 60.0f;
+
+
+  # =========================================================
+  # Empfangszeiten Nordwest
+  # =========================================================
+
+  - platform: template
+    name: "SolarSense Nordwest Minuten seit letztem Empfang"
+    id: solarsense_nordwest_minutes_since_packet
+    unit_of_measurement: "min"
+    device_class: duration
+    state_class: measurement
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      if (id(solarsense_nordwest_last_packet_timestamp) == 0) {
+        return NAN;
+      }
+
+      auto now = id(homeassistant_time).now();
+
+      if (!now.is_valid()) {
+        return NAN;
+      }
+
+      if (now.timestamp < id(solarsense_nordwest_last_packet_timestamp)) {
+        return 0.0f;
+      }
+
+      return static_cast<float>(
+        now.timestamp - id(solarsense_nordwest_last_packet_timestamp)
+      ) / 60.0f;
+
+
+  # =========================================================
+  # Zeit seit letzter Sonne Südost
+  # =========================================================
+
+  - platform: template
+    name: "SolarSense Südost Zeit seit letzter Sonne"
+    id: solarsense_suedost_minutes_since_sun
+    unit_of_measurement: "min"
+    device_class: duration
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 60s
+    lambda: |-
+      if (id(solarsense_suedost_last_sun_timestamp) == 0) {
+        return NAN;
+      }
+
+      auto now = id(homeassistant_time).now();
+
+      if (!now.is_valid()) {
+        return NAN;
+      }
+
+      if (now.timestamp < id(solarsense_suedost_last_sun_timestamp)) {
+        return 0.0f;
+      }
+
+      return static_cast<float>(
+        now.timestamp - id(solarsense_suedost_last_sun_timestamp)
+      ) / 60.0f;
+
+
+  # =========================================================
+  # Zeit seit letzter Sonne Nordwest
+  # =========================================================
+
+  - platform: template
+    name: "SolarSense Nordwest Zeit seit letzter Sonne"
+    id: solarsense_nordwest_minutes_since_sun
+    unit_of_measurement: "min"
+    device_class: duration
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 60s
+    lambda: |-
+      if (id(solarsense_nordwest_last_sun_timestamp) == 0) {
+        return NAN;
+      }
+
+      auto now = id(homeassistant_time).now();
+
+      if (!now.is_valid()) {
+        return NAN;
+      }
+
+      if (now.timestamp < id(solarsense_nordwest_last_sun_timestamp)) {
+        return 0.0f;
+      }
+
+      return static_cast<float>(
+        now.timestamp - id(solarsense_nordwest_last_sun_timestamp)
+      ) / 60.0f;
+
+
+  # =========================================================
+  # BLE Paket-Zähler
+  #
+  # Zählt gültig ausgewertete SolarSense-Telegramme seit dem
+  # letzten Neustart des ESP32.
+  # =========================================================
+
+  - platform: template
+    name: "SolarSense Südost gültige BLE-Pakete"
+    id: solarsense_suedost_packet_count
+    accuracy_decimals: 0
+    icon: "mdi:bluetooth-transfer"
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Nordwest gültige BLE-Pakete"
+    id: solarsense_nordwest_packet_count
+    accuracy_decimals: 0
+    icon: "mdi:bluetooth-transfer"
+    entity_category: diagnostic
+    update_interval: never
+
+
+  # =========================================================
+  # ESP32 Diagnose
+  # =========================================================
+
+  - platform: wifi_signal
+    name: "ESP32 SolarSensor WLAN-Signal"
+    id: esp32_solarsensor_wlan_signal
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "ESP32 SolarSensor Laufzeit"
+    id: esp32_solarsensor_laufzeit
+    type: seconds
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: internal_temperature
+    name: "ESP32 SolarSensor interne Temperatur"
+    id: esp32_solarsensor_interne_temperatur
+    accuracy_decimals: 1
+    update_interval: 60s
+    entity_category: diagnostic
+
+
+# =========================================================
+# Empfangsstatus
+# =========================================================
+
+binary_sensor:
+
+  - platform: template
+    name: "SolarSense Südost Empfang"
+    id: solarsense_suedost_online
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: |-
+      return id(solarsense_suedost_last_packet_ms) != 0 &&
+             static_cast<uint32_t>(
+               millis() - id(solarsense_suedost_last_packet_ms)
+             ) <= 300000UL;
+
+  - platform: template
+    name: "SolarSense Nordwest Empfang"
+    id: solarsense_nordwest_online
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: |-
+      return id(solarsense_nordwest_last_packet_ms) != 0 &&
+             static_cast<uint32_t>(
+               millis() - id(solarsense_nordwest_last_packet_ms)
+             ) <= 300000UL;
+
+
+# =========================================================
+# Text- und Diagnose-Sensoren
+# =========================================================
+
+text_sensor:
+  - platform: template
+    name: "Victron Bridge Übertragungsstatus"
+    id: victron_bridge_post_status
+    icon: "mdi:cloud-upload-outline"
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "Victron Bridge Kopplungsstatus"
+    id: victron_bridge_pair_status
+    icon: mdi:link-variant
+    entity_category: diagnostic
+    update_interval: 15s
+    lambda: |-
+      if (!id(victron_token_name).empty() && !id(victron_token_password).empty())
+        return {"Token gespeichert (Bridge per Schalter steuerbar)"};
+      return {"Nicht gekoppelt"};
+
+  - platform: template
+    name: "Victron Bridge Südost ADV Hex"
+    id: victron_so_adv_hex
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    name: "Victron Bridge Nordwest ADV Hex"
+    id: victron_nw_adv_hex
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Südost RAW"
+    id: solarsense_suedost_raw
+    icon: "mdi:code-braces"
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "SolarSense Nordwest RAW"
+    id: solarsense_nordwest_raw
+    icon: "mdi:code-braces"
+    entity_category: diagnostic
+    update_interval: never
+
+
+  # ---------------------------------------------------------
+  # Letzter Empfang Südost
+  # ---------------------------------------------------------
+
+  - platform: template
+    name: "SolarSense Südost Letzter Empfang"
+    id: solarsense_suedost_last_packet_text
+    icon: "mdi:clock-check-outline"
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      if (id(solarsense_suedost_last_packet_timestamp) == 0) {
+        return {"Noch kein Empfang"};
+      }
+
+      auto last = ESPTime::from_epoch_local(
+        id(solarsense_suedost_last_packet_timestamp)
+      );
+
+      return {last.strftime("%d.%m.%Y %H:%M:%S")};
+
+
+  # ---------------------------------------------------------
+  # Letzter Empfang Nordwest
+  # ---------------------------------------------------------
+
+  - platform: template
+    name: "SolarSense Nordwest Letzter Empfang"
+    id: solarsense_nordwest_last_packet_text
+    icon: "mdi:clock-check-outline"
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      if (id(solarsense_nordwest_last_packet_timestamp) == 0) {
+        return {"Noch kein Empfang"};
+      }
+
+      auto last = ESPTime::from_epoch_local(
+        id(solarsense_nordwest_last_packet_timestamp)
+      );
+
+      return {last.strftime("%d.%m.%Y %H:%M:%S")};
+
+
+  # ---------------------------------------------------------
+  # Letzte Sonne Südost
+  # ---------------------------------------------------------
+
+  - platform: template
+    name: "SolarSense Südost Letzte Sonne"
+    id: solarsense_suedost_last_sun_text
+    icon: "mdi:white-balance-sunny"
+    update_interval: 60s
+    lambda: |-
+      if (id(solarsense_suedost_last_sun_timestamp) == 0) {
+        return {"Noch keine Sonne erfasst"};
+      }
+
+      auto last = ESPTime::from_epoch_local(
+        id(solarsense_suedost_last_sun_timestamp)
+      );
+
+      return {last.strftime("%d.%m.%Y %H:%M:%S")};
+
+
+  # ---------------------------------------------------------
+  # Letzte Sonne Nordwest
+  # ---------------------------------------------------------
+
+  - platform: template
+    name: "SolarSense Nordwest Letzte Sonne"
+    id: solarsense_nordwest_last_sun_text
+    icon: "mdi:white-balance-sunny"
+    update_interval: 60s
+    lambda: |-
+      if (id(solarsense_nordwest_last_sun_timestamp) == 0) {
+        return {"Noch keine Sonne erfasst"};
+      }
+
+      auto last = ESPTime::from_epoch_local(
+        id(solarsense_nordwest_last_sun_timestamp)
+      );
+
+      return {last.strftime("%d.%m.%Y %H:%M:%S")};
+
+
+  # ---------------------------------------------------------
+  # Gesamtstatus der beiden SolarSense Sensoren
+  # ---------------------------------------------------------
+
+  - platform: template
+    name: "SolarSense Gesamtstatus"
+    id: solarsense_gesamtstatus
+    icon: "mdi:solar-panel"
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: |-
+      const bool suedost = id(solarsense_suedost_online).state;
+      const bool nordwest = id(solarsense_nordwest_online).state;
+
+      if (suedost && nordwest) {
+        return {"Beide Sensoren OK"};
+      }
+
+      if (suedost && !nordwest) {
+        return {"Nordwest ohne Empfang"};
+      }
+
+      if (!suedost && nordwest) {
+        return {"Südost ohne Empfang"};
+      }
+
+      return {"Beide Sensoren ohne Empfang"};
+
+
+  # ---------------------------------------------------------
+  # ESPHome Version
+  # ---------------------------------------------------------
+
+  - platform: version
+    name: "ESP32 SolarSensor ESPHome Version"
+    hide_timestamp: true
+    entity_category: diagnostic
+
+
+  # ---------------------------------------------------------
+  # Netzwerkdaten
+  # ---------------------------------------------------------
+
+  - platform: wifi_info
+    ip_address:
+      name: "ESP32 SolarSensor IP-Adresse"
+      entity_category: diagnostic
+
+
+  # ---------------------------------------------------------
+  # Neustartgrund
+  # ---------------------------------------------------------
+
+  - platform: debug
+    reset_reason:
+      name: "ESP32 SolarSensor Neustartgrund"
+      entity_category: diagnostic
+
+
+# =========================================================
+# BLE Scanner
+# =========================================================
+
+esp32_ble_tracker:
+
+  scan_parameters:
+    interval: 320ms
+    window: 320ms
+    continuous: true
+    active: false
+
+  # BLE packet capture from the live-tested 4.3.1 base / BLE-Paketerfassung aus 4.3.1.
+  # Keeps the existing Bluetooth proxy and 31-byte advertising extraction.
+  on_ble_advertise:
+    - mac_address:
+        - ${sensor_1_mac}
+        - ${sensor_2_mac}
+      then:
+        - lambda: |-
+            const auto &pkt = x.get_scan_result();
+            const unsigned length = static_cast<unsigned>(pkt.adv_data_len) +
+                                    static_cast<unsigned>(pkt.scan_rsp_len);
+            ESP_LOGV("victron_bridge_probe",
+                     "BLE %s | RSSI %d | ADV bytes %u",
+                     x.address_str().c_str(), x.get_rssi(), length);
+            // Vollstaendige Advertising-Bytes; gleiche Scanner-Ergebnisse wie bisher.
+            if (length == 0 || length > sizeof(pkt.ble_adv)) return;
+            std::string hex;
+            hex.reserve(length * 2);
+            char piece[3];
+            for (unsigned i = 0; i < length; ++i) {
+              snprintf(piece, sizeof(piece), "%02X", pkt.ble_adv[i]);
+              hex += piece;
+            }
+            if (x.address_str() == "${sensor_1_mac}") {
+              id(victron_so_adv_hex).publish_state(hex);
+            } else if (x.address_str() == "${sensor_2_mac}") {
+              id(victron_nw_adv_hex).publish_state(hex);
+            }
+
+  on_ble_manufacturer_data_advertise:
+
+    # =======================================================
+    # SÜDOST
+    # =======================================================
+
+    - mac_address: ${sensor_1_mac}
+      manufacturer_id: "02E1"
+      then:
+
+        - lambda: |-
+            if (x.size() < 22) {
+              return;
+            }
+
+            if (x[0] != 0x10) {
+              return;
+            }
+
+            uint16_t raw_irradiance =
+                static_cast<uint16_t>(x[13]) |
+                (static_cast<uint16_t>(x[14]) << 8);
+
+            float irradiance =
+                static_cast<float>(raw_irradiance) / 10.0f;
+
+            uint32_t raw_yield =
+                static_cast<uint32_t>((x[15] >> 4) & 0x0F) |
+                (static_cast<uint32_t>(x[16]) << 4) |
+                (static_cast<uint32_t>(x[17]) << 12);
+
+            float yield =
+                static_cast<float>(raw_yield) / 100.0f;
+
+            uint16_t raw_power =
+                static_cast<uint16_t>(x[18]) |
+                (static_cast<uint16_t>(x[19] & 0x3F) << 8);
+
+            float power =
+                static_cast<float>(raw_power);
+
+            uint16_t raw_temperature =
+                static_cast<uint16_t>((x[19] >> 6) & 0x03) |
+                (static_cast<uint16_t>(x[20]) << 2) |
+                (static_cast<uint16_t>(x[21] & 0x01) << 10);
+
+            float temperature =
+                static_cast<float>(raw_temperature) / 10.0f - 60.0f;
+
+
+            // Messwerte veröffentlichen
+
+            id(solarsense_suedost_irradiance).publish_state(irradiance);
+            id(solarsense_suedost_power).publish_state(power);
+            id(solarsense_suedost_yield).publish_state(yield);
+            id(solarsense_suedost_temperature).publish_state(temperature);
+
+
+            // Gültige BLE-Pakete zählen
+
+            static uint32_t packet_count_suedost = 0;
+            packet_count_suedost++;
+
+            id(solarsense_suedost_packet_count).publish_state(
+              static_cast<float>(packet_count_suedost)
+            );
+
+
+            // Empfangszeit speichern
+
+            id(solarsense_suedost_last_packet_ms) = millis();
+
+            auto now = id(homeassistant_time).now();
+
+            if (now.is_valid()) {
+
+              id(solarsense_suedost_last_packet_timestamp) = now.timestamp;
+
+              if (irradiance > 5.0f) {
+                id(solarsense_suedost_last_sun_timestamp) = now.timestamp;
+              }
+            }
+
+
+            // RAW-Daten maximal einmal pro Sekunde veröffentlichen
+
+            static uint32_t last_raw_publish_suedost = 0;
+
+            if (millis() - last_raw_publish_suedost >= 1000) {
+
+              std::string raw_hex;
+
+              raw_hex.reserve(x.size() * 2);
+
+              char buf[3];
+
+              for (auto b : x) {
+
+                snprintf(buf, sizeof(buf), "%02X", b);
+
+                raw_hex += buf;
+              }
+
+              id(solarsense_suedost_raw).publish_state(raw_hex);
+
+              last_raw_publish_suedost = millis();
+            }
+
+
+            ESP_LOGD(
+              "solarsense",
+              "Südost: %.1f W/m² | %.0f W | %.2f kWh | %.1f °C",
+              irradiance,
+              power,
+              yield,
+              temperature
+            );
+
+
+    # =======================================================
+    # NORDWEST
+    # =======================================================
+
+    - mac_address: ${sensor_2_mac}
+      manufacturer_id: "02E1"
+      then:
+
+        - lambda: |-
+            if (x.size() < 22) {
+              return;
+            }
+
+            if (x[0] != 0x10) {
+              return;
+            }
+
+            uint16_t raw_irradiance =
+                static_cast<uint16_t>(x[13]) |
+                (static_cast<uint16_t>(x[14]) << 8);
+
+            float irradiance =
+                static_cast<float>(raw_irradiance) / 10.0f;
+
+            uint32_t raw_yield =
+                static_cast<uint32_t>((x[15] >> 4) & 0x0F) |
+                (static_cast<uint32_t>(x[16]) << 4) |
+                (static_cast<uint32_t>(x[17]) << 12);
+
+            float yield =
+                static_cast<float>(raw_yield) / 100.0f;
+
+            uint16_t raw_power =
+                static_cast<uint16_t>(x[18]) |
+                (static_cast<uint16_t>(x[19] & 0x3F) << 8);
+
+            float power =
+                static_cast<float>(raw_power);
+
+            uint16_t raw_temperature =
+                static_cast<uint16_t>((x[19] >> 6) & 0x03) |
+                (static_cast<uint16_t>(x[20]) << 2) |
+                (static_cast<uint16_t>(x[21] & 0x01) << 10);
+
+            float temperature =
+                static_cast<float>(raw_temperature) / 10.0f - 60.0f;
+
+
+            // Messwerte veröffentlichen
+
+            id(solarsense_nordwest_irradiance).publish_state(irradiance);
+            id(solarsense_nordwest_power).publish_state(power);
+            id(solarsense_nordwest_yield).publish_state(yield);
+            id(solarsense_nordwest_temperature).publish_state(temperature);
+
+
+            // Gültige BLE-Pakete zählen
+
+            static uint32_t packet_count_nordwest = 0;
+            packet_count_nordwest++;
+
+            id(solarsense_nordwest_packet_count).publish_state(
+              static_cast<float>(packet_count_nordwest)
+            );
+
+
+            // Empfangszeit speichern
+
+            id(solarsense_nordwest_last_packet_ms) = millis();
+
+            auto now = id(homeassistant_time).now();
+
+            if (now.is_valid()) {
+
+              id(solarsense_nordwest_last_packet_timestamp) = now.timestamp;
+
+              if (irradiance > 5.0f) {
+                id(solarsense_nordwest_last_sun_timestamp) = now.timestamp;
+              }
+            }
+
+
+            // RAW-Daten maximal einmal pro Sekunde veröffentlichen
+
+            static uint32_t last_raw_publish_nordwest = 0;
+
+            if (millis() - last_raw_publish_nordwest >= 1000) {
+
+              std::string raw_hex;
+
+              raw_hex.reserve(x.size() * 2);
+
+              char buf[3];
+
+              for (auto b : x) {
+
+                snprintf(buf, sizeof(buf), "%02X", b);
+
+                raw_hex += buf;
+              }
+
+              id(solarsense_nordwest_raw).publish_state(raw_hex);
+
+              last_raw_publish_nordwest = millis();
+            }
+
+
+            ESP_LOGD(
+              "solarsense",
+              "Nordwest: %.1f W/m² | %.0f W | %.2f kWh | %.1f °C",
+              irradiance,
+              power,
+              yield,
+              temperature
+            );
+
+
+# =========================================================
+# Debug-Komponente
+# Wird für den Neustartgrund benötigt
+# =========================================================
+
+debug:
+  update_interval: 60s
