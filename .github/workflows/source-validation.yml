@@ -1,0 +1,67 @@
+# Deutsch/English: CI uses ONLY synthetic values. Never connect real devices.
+name: Source validation / Quellcode-Pruefung
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpp:
+    name: C++ unit tests / C++-Einzeltests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Privacy guard / Datenschutzpruefung
+        run: python scripts/check_publication_privacy.py
+      - name: Build old prototype unit tests / Alte Prototyp-Tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Wpedantic -Werror \
+            -Isrc tests/test_solarsense.cpp -o /tmp/test_solarsense
+          /tmp/test_solarsense
+      - name: Build and run isolated duplicate-policy test
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Wpedantic -Werror \
+            -Itests/stubs -Iesphome tests/test_duplicate.cpp -o /tmp/test_duplicate
+          /tmp/test_duplicate
+
+  esphome:
+    name: ESPHome config / ESPHome-Konfiguration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install tested ESPHome version
+        run: python -m pip install "esphome==2026.9.1"
+      - name: Generate synthetic throwaway test configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p esphome/certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj "/CN=SolarSense-CI-Test-CA" \
+            -keyout /tmp/solarsense-ci-only.key \
+            -out esphome/certs/cerbo-ca.pem >/dev/null 2>&1
+          cat > esphome/secrets.yaml <<'SECRETS'
+          wifi_ssid: "CI_TEST_ONLY"
+          wifi_password: "CI_TEST_ONLY_NOT_A_REAL_PASSWORD"
+          esphome_api_encryption_key: "EPHEMERAL_CI_KEY_PLACEHOLDER"
+          sensor_1_mac: "02:00:00:00:00:01"
+          sensor_2_mac: "02:00:00:00:00:02"
+          cerbo_gateway_mac: "02:00:00:00:00:03"
+          cerbo_https_url: "https://cerbo.example.invalid/ble-gw/"
+          cerbo_pairing_device_id: "ci-synthetic-gateway"
+          cerbo_ca_path: "certs/cerbo-ca.pem"
+          SECRETS
+          CI_API_KEY="$(openssl rand -base64 32)"
+          sed -i "s|EPHEMERAL_CI_KEY_PLACEHOLDER|${CI_API_KEY}|" esphome/secrets.yaml
+      - name: Validate ESPHome YAML / Konfiguration pruefen
+        run: esphome config esphome/solarsense-bridge.yaml
+      - name: Compile ESPHome firmware / Firmware kompilieren
+        timeout-minutes: 18
+        run: esphome compile esphome/solarsense-bridge.yaml

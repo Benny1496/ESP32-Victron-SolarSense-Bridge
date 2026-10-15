@@ -1,0 +1,48 @@
+# EN: Export only the current tracked source files, never prior commit history.
+# DE: Ausschliesslich aktuellen Quellcode exportieren, niemals die alte Git-Historie.
+name: Clean source export / Bereinigter Quellcode
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    name: Source-only ZIP / ZIP ohne Git-Historie
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check tracked-file privacy / Datenschutzpruefung
+        run: python scripts/check_publication_privacy.py
+      - name: Create clean source archive / Bereinigtes Archiv erstellen
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          git archive --format=zip --output=dist/SolarSense-Bridge-Clean-Source.zip HEAD
+          unzip -Z1 dist/SolarSense-Bridge-Clean-Source.zip > /tmp/solarsense-files.txt
+          if grep -Eq '(^|/)\.git(/|$)' /tmp/solarsense-files.txt; then
+            echo "FAIL: archive includes Git metadata / Archiv enthaelt Git-Metadaten"
+            exit 1
+          fi
+          if grep -Eq '(^|/)(secrets\.yaml|\.env|id_rsa|id_ed25519)$' /tmp/solarsense-files.txt; then
+            echo "FAIL: archive includes private configuration / Privater Inhalt"
+            exit 1
+          fi
+          sha256sum dist/SolarSense-Bridge-Clean-Source.zip > dist/SHA256SUMS.txt
+          echo "Source files / Quelldateien:"
+          wc -l /tmp/solarsense-files.txt
+          echo "Only the checked HEAD worktree is exported / Kein Alpha-Verlauf enthalten"
+      - name: Save publication-ready export / Export bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: solarsense-clean-source-only
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
