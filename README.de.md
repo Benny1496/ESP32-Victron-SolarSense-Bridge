@@ -1,18 +1,33 @@
 # ESP32 Victron SolarSense Bridge – Deutsch
 
-Open-Source-Projekt aus einer tatsächlich betriebenen ESPHome-/ESP32-Installation: Zwei Victron SolarSense BLE-Sensoren werden in Home Assistant ausgewertet und ihre Original-Bluetooth-Werbepakete an einen Cerbo GX (Venus OS) weitergeleitet.
+[**Deutsch**](README.de.md) · [English](README.en.md) · [Zweisprachige Startseite](README.md)
 
-**Stand: Community-Quellcode-Vorschau, nicht als fertig getestetes Installationspaket freigegeben.** Die bewährte Ausgangsversion 4.3.1 wurde im Live-System mit zwei Sensoren über Nacht erfolgreich betrieben. Die hier angebotene Variante ersetzt private Gerätewerte durch eigene Einstellungen und ergänzt Zertifikatsprüfung sowie Erkennung unveränderter Daten. **Diese beiden Änderungen sind noch nicht im produktiven System getestet.**
+Dies ist ein Open-Source-ESP32-/ESPHome-Projekt auf Grundlage einer privat betriebenen **Stufe 4.3.1**. Zwei Victron SolarSense BLE-Sensoren werden in Home Assistant ausgewertet. Ihre originalen BLE-Werbepakete können zusätzlich über zertifikatsgeprüftes HTTPS an Cerbo GX (Venus OS) gesendet werden.
 
-Die englische `README.md` im Repository bleibt bewusst im bisherigen Zustand. Aktueller Einstieg in beide Sprachen:
+## Aktueller Umfang
 
-- Installation: [Deutsch](docs/INSTALLATION.de.md) · [English](docs/INSTALLATION.en.md)
-- Sicherheit: [Deutsch](docs/SECURITY.de.md) · [English](docs/SECURITY.en.md)
-- Versandlogik: [Deutsch](docs/TRANSMISSION.de.md) · [English](docs/TRANSMISSION.en.md)
-- Herkunft und Autoren: [Deutsch](docs/CREDITS.de.md) · [English](docs/CREDITS.en.md)
-- Mitmachen: [Deutsch](docs/CONTRIBUTING.de.md) · [English](docs/CONTRIBUTING.en.md)
-- Versions- und Teststand: [Deutsch](docs/STATUS.de.md) · [English](docs/STATUS.en.md)
+- **Zwei** fest konfigurierte BLE-Sensoren; weitere Sensoren sind eine geplante Community-Erweiterung.
+- Bestrahlungsstärke, geschätzte Leistung, Tagesertrag, Zelltemperatur, RSSI, Diagnosewerte und ESPHome-Bluetooth-Proxy.
+- Cerbo-GX-Kopplung und BLE-Weiterleitung über `/ble-gw/`; nach Neustart ist die Übertragung **AUS**.
+- HTTPS mit Zertifikats-/Hostnamenprüfung und Deaktivierung von Redirects.
+- Bei identischen Daten 15-Sekunden-Refresh statt dauernder Doppelübertragungen.
 
-Die Vorlage liegt unter `esphome/`. Eigene Zugangsdaten, MAC-Adressen, lokale Zertifikate und Gerätekonfigurationen gehören niemals in Git. Keine offizielle Veröffentlichung von Victron Energy, Shelly oder ESPHome. Eigene Codeanteile stehen unter GPL-3.0-only; Fremdrechte bleiben unberührt.
+## Teststand
 
-- Veröffentlichung / Publishing: [Deutsch](docs/PUBLISHING.de.md) · [English](docs/PUBLISHING.en.md)
+Die originale private 4.3.1 war mit zwei Sensoren im Live-System funktionsfähig. Die veröffentlichte Variante wurde mit ESPHome 2026.9.1 vollständig kompiliert; die C++-Tests und die automatische Datenschutzprüfung waren erfolgreich. Die beiden neuen HTTPS-/Duplikatänderungen wurden **noch nicht gemeinsam auf echter Hardware mit einem Cerbo GX** getestet. Dies ist **Community-Quellcode**, keine produktiv zertifizierte Firmware.
+
+## Einstieg und Dokumentation
+
+| Thema | Deutsch | Englisch |
+|---|---|---|
+| Installation | [Anleitung](docs/INSTALLATION.de.md) | [Guide](docs/INSTALLATION.en.md) |
+| Home-Assistant-Namen | [Anzeigen](docs/HOME_ASSISTANT.de.md) | [Labels](docs/HOME_ASSISTANT.en.md) |
+| Sicherheit | [Sicherheit](docs/SECURITY.de.md) | [Security](docs/SECURITY.en.md) |
+| Weiterleitung | [Übertragung](docs/TRANSMISSION.de.md) | [Transmission](docs/TRANSMISSION.en.md) |
+| Entwicklungsstand | [Status](docs/STATUS.de.md) | [Status](docs/STATUS.en.md) |
+| Quellen und Autoren | [Herkunft](docs/CREDITS.de.md) | [Credits](docs/CREDITS.en.md) |
+| Mitmachen | [Beitragen](docs/CONTRIBUTING.de.md) | [Contributing](docs/CONTRIBUTING.en.md) |
+| Veröffentlichung | [Hinweise](docs/PUBLISHING.de.md) | [Publishing](docs/PUBLISHING.en.md) |
+| Prüfungen | [Checkliste](docs/RELEASE_CHECKLIST.de.md) | [Checklist](docs/RELEASE_CHECKLIST.md) |
+
+Der Quellcode liegt unter `esphome/`; eine private `secrets.yaml` und eigene Vertrauenszertifikate werden **nicht** veröffentlicht. Die eigenen Anteile stehen unter **GPL-3.0-only**; Rechte Dritter bleiben bestehen. Keine offizielle Victron-/ESPHome-/Shelly-Veröffentlichung.
