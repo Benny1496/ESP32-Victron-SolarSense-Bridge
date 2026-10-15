@@ -1,0 +1,3 @@
+# Vertrauenswürdiges Cerbo-Zertifikat
+
+Die Datei `cerbo-ca.pem` muss der Anwender selbst aus einer **vertrauenswürdigen Quelle** bereitstellen. Nur ein öffentliches CA- bzw. Serverzertifikat (PEM), **kein privater Schlüssel**. Der Zertifikatsname muss zur in `cerbo_https_url` verwendeten Adresse passen. Ein selbstsigniertes oder von einer privaten CA signiertes Zertifikat kann über `http_request.ca_certificate_path` eingebunden werden. Keine Zertifikatsprüfung deaktivieren. Die Datei gehört zu deiner lokalen Installation und wird nicht veröffentlicht. Ein bloß aus einer ungesicherten Netzverbindung heruntergeladenes Zertifikat gilt nicht automatisch als vertrauenswürdig.
