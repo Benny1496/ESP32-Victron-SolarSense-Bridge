@@ -1,4 +1,5 @@
 # Independent, manually triggered external SolidCraft diagnostics.
+# Native suites are parallel independent jobs, with a 90-minute maximum per job.
 # Does not change ESP32 sources, and does not run automatically on push.
 # Checks out public SolidCraft branches read-only and uploads CI reports.
 name: SolidCraft external diagnostics (manual)
@@ -14,10 +15,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  native-regression:
-    name: SolidCraft Rust geometry, kernel, engine and UI
+  native-geometry:
+    name: Formatting, geometry, sketch and kernel
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 90
     env:
       CARGO_INCREMENTAL: "0"
       CARGO_TERM_COLOR: always
@@ -66,6 +67,65 @@ jobs:
           set -o pipefail
           cargo test --locked --profile ci -p solidcraft-geom -p solidcraft-sketch -p solidcraft-kernel 2>&1 | tee ci-reports/geometry.log
 
+      - name: Upload native-geometry test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-native-geometry-reports
+          path: solidcraft/ci-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Summarize native-geometry results
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "## SolidCraft Formatting, geometry, sketch and kernel" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test group | Outcome |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Rust formatting | ${{ steps.fmt.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Geometry, sketch and kernel tests | ${{ steps.geometry.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          if [ "${{ steps.fmt.outcome }}" != "success" ]; then failed=$((failed + 1)); fi
+          if [ "${{ steps.geometry.outcome }}" != "success" ]; then failed=$((failed + 1)); fi
+          echo "**Groups not passing: $failed**" >> "$GITHUB_STEP_SUMMARY"
+          test "$failed" -eq 0
+
+
+  native-engine:
+    name: Engine regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Read only checkout of public SolidCraft fork
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: feature/browser-automation
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Set up pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+          components: rustfmt
+
+      - name: Cache Rust build dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-native-diagnostics
+
+      - name: Create report directory and show exact commit
+        working-directory: solidcraft
+        run: |
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/source-commit.txt
+
       - name: Engine regression tests
         id: engine
         continue-on-error: true
@@ -74,6 +134,63 @@ jobs:
         run: |
           set -o pipefail
           cargo test --locked --profile ci -p solidcraft-engine 2>&1 | tee ci-reports/engine.log
+
+      - name: Upload native-engine test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-native-engine-reports
+          path: solidcraft/ci-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Summarize native-engine results
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "## SolidCraft Engine regression tests" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test group | Outcome |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Engine regression tests | ${{ steps.engine.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          if [ "${{ steps.engine.outcome }}" != "success" ]; then failed=$((failed + 1)); fi
+          echo "**Groups not passing: $failed**" >> "$GITHUB_STEP_SUMMARY"
+          test "$failed" -eq 0
+
+
+  native-ui:
+    name: Drawing UI tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Read only checkout of public SolidCraft fork
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: feature/browser-automation
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Set up pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+          components: rustfmt
+
+      - name: Cache Rust build dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-native-diagnostics
+
+      - name: Create report directory and show exact commit
+        working-directory: solidcraft
+        run: |
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/source-commit.txt
 
       - name: Drawing UI tests
         id: ui
@@ -84,6 +201,63 @@ jobs:
           set -o pipefail
           cargo test --locked --profile ci -p solidcraft-ui-egui --lib 2>&1 | tee ci-reports/ui.log
 
+      - name: Upload native-ui test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-native-ui-reports
+          path: solidcraft/ci-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Summarize native-ui results
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "## SolidCraft Drawing UI tests" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test group | Outcome |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Drawing UI tests | ${{ steps.ui.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          if [ "${{ steps.ui.outcome }}" != "success" ]; then failed=$((failed + 1)); fi
+          echo "**Groups not passing: $failed**" >> "$GITHUB_STEP_SUMMARY"
+          test "$failed" -eq 0
+
+
+  native-io:
+    name: Document and import/export tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Read only checkout of public SolidCraft fork
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: feature/browser-automation
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Set up pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+          components: rustfmt
+
+      - name: Cache Rust build dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-native-diagnostics
+
+      - name: Create report directory and show exact commit
+        working-directory: solidcraft
+        run: |
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/source-commit.txt
+
       - name: Document and import/export tests
         id: io
         continue-on-error: true
@@ -93,44 +267,32 @@ jobs:
           set -o pipefail
           cargo test --locked --profile ci -p solidcraft-doc -p solidcraft-io 2>&1 | tee ci-reports/io.log
 
-      - name: Upload all Rust test reports
+      - name: Upload native-io test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: solidcraft-native-test-reports
+          name: solidcraft-native-io-reports
           path: solidcraft/ci-reports/
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Summarize all independent test groups
+      - name: Summarize native-io results
         if: ${{ !cancelled() }}
-        env:
-          FMT: ${{ steps.fmt.outcome }}
-          GEOMETRY: ${{ steps.geometry.outcome }}
-          ENGINE: ${{ steps.engine.outcome }}
-          UI: ${{ steps.ui.outcome }}
-          IO: ${{ steps.io.outcome }}
         shell: bash
         run: |
-          echo "## SolidCraft native diagnostics" >> "$GITHUB_STEP_SUMMARY"
+          echo "## SolidCraft Document and import/export tests" >> "$GITHUB_STEP_SUMMARY"
           echo "| Test group | Outcome |" >> "$GITHUB_STEP_SUMMARY"
           echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Document and import/export tests | ${{ steps.io.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
           failed=0
-          for item in "Formatting|$FMT" "Geometry / sketch / kernel|$GEOMETRY" "Engine|$ENGINE" "UI|$UI" "Document / IO|$IO"; do
-            label="${item%%|*}"
-            outcome="${item#*|}"
-            echo "| $label | $outcome |" >> "$GITHUB_STEP_SUMMARY"
-            if [ "$outcome" != "success" ]; then
-              failed=$((failed + 1))
-            fi
-          done
+          if [ "${{ steps.io.outcome }}" != "success" ]; then failed=$((failed + 1)); fi
           echo "**Groups not passing: $failed**" >> "$GITHUB_STEP_SUMMARY"
           test "$failed" -eq 0
 
   workshop-oracle:
     name: Independent #4950 workshop oracle
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     env:
       CARGO_INCREMENTAL: "0"
       CARGO_TERM_COLOR: always
