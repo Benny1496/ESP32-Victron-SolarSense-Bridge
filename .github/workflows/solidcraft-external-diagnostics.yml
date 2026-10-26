@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Benny1496/solidcraft
-          ref: test/windows-regression-33-35
+          ref: fix/test-4-known-regressions
           path: solidcraft
           persist-credentials: false
 
@@ -104,7 +104,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Benny1496/solidcraft
-          ref: test/windows-regression-33-35
+          ref: fix/test-4-known-regressions
           path: solidcraft
           persist-credentials: false
 
@@ -170,7 +170,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Benny1496/solidcraft
-          ref: test/windows-regression-33-35
+          ref: fix/test-4-known-regressions
           path: solidcraft
           persist-credentials: false
 
@@ -236,7 +236,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Benny1496/solidcraft
-          ref: test/windows-regression-33-35
+          ref: fix/test-4-known-regressions
           path: solidcraft
           persist-credentials: false
 
