@@ -1,0 +1,223 @@
+# Review-only branch: do not start or merge until GitHub Support has confirmed
+# whether cross-repository SolidCraft testing is permitted.
+# This workflow is manual-only and does not run on push.
+name: SolidCraft external diagnostics (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-external-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  native-regression:
+    name: SolidCraft Rust geometry, kernel, engine and UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Read only checkout of public SolidCraft fork
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: feature/browser-automation
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Set up pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+          components: rustfmt
+
+      - name: Cache Rust build dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-native-diagnostics
+
+      - name: Create report directory and show exact commit
+        working-directory: solidcraft
+        run: |
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/source-commit.txt
+
+      - name: Rust formatting
+        id: fmt
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo fmt --all -- --check 2>&1 | tee ci-reports/fmt.log
+
+      - name: Geometry, sketch and kernel tests
+        id: geometry
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked --profile ci -p solidcraft-geom -p solidcraft-sketch -p solidcraft-kernel 2>&1 | tee ci-reports/geometry.log
+
+      - name: Engine regression tests
+        id: engine
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked --profile ci -p solidcraft-engine 2>&1 | tee ci-reports/engine.log
+
+      - name: Drawing UI tests
+        id: ui
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked --profile ci -p solidcraft-ui-egui --lib 2>&1 | tee ci-reports/ui.log
+
+      - name: Document and import/export tests
+        id: io
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked --profile ci -p solidcraft-doc -p solidcraft-io 2>&1 | tee ci-reports/io.log
+
+      - name: Upload all Rust test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-native-test-reports
+          path: solidcraft/ci-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Summarize all independent test groups
+        if: ${{ !cancelled() }}
+        env:
+          FMT: ${{ steps.fmt.outcome }}
+          GEOMETRY: ${{ steps.geometry.outcome }}
+          ENGINE: ${{ steps.engine.outcome }}
+          UI: ${{ steps.ui.outcome }}
+          IO: ${{ steps.io.outcome }}
+        shell: bash
+        run: |
+          echo "## SolidCraft native diagnostics" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test group | Outcome |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for item in "Formatting|$FMT" "Geometry / sketch / kernel|$GEOMETRY" "Engine|$ENGINE" "UI|$UI" "Document / IO|$IO"; do
+            label="${item%%|*}"
+            outcome="${item#*|}"
+            echo "| $label | $outcome |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$outcome" != "success" ]; then
+              failed=$((failed + 1))
+            fi
+          done
+          echo "**Groups not passing: $failed**" >> "$GITHUB_STEP_SUMMARY"
+          test "$failed" -eq 0
+
+  workshop-oracle:
+    name: Independent #4950 workshop oracle
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Read only checkout of public SolidCraft oracle branch
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: feature/upstream-4950-oracle
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Set up pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Cache Rust build dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-workshop-oracle
+
+      - name: Create report directory and show exact commit
+        working-directory: solidcraft
+        run: |
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/source-commit.txt
+
+      - name: Recreate independent workshop expectations
+        id: analytic
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 tools/oracle-analytic/cases_workshop.py 2>&1 | tee ci-reports/analytic.log
+
+      - name: Compile native SolidCraft oracle CLI
+        id: cli
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo build --locked --profile ci -p solidcraft-cli 2>&1 | tee ci-reports/cli-build.log
+
+      - name: Run full oracle, including workshop fixtures
+        id: oracle
+        if: ${{ !cancelled() && steps.cli.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo xtask oracle --cli target/ci/solidcraft-cli 2>&1 | tee ci-reports/oracle.log
+
+      - name: Upload oracle reports and generated documentation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-workshop-oracle-reports
+          path: |
+            solidcraft/ci-reports/
+            solidcraft/docs/oracle.md
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Summarize and preserve failure outcome
+        if: ${{ !cancelled() }}
+        env:
+          ANALYTIC: ${{ steps.analytic.outcome }}
+          CLI: ${{ steps.cli.outcome }}
+          ORACLE: ${{ steps.oracle.outcome }}
+        shell: bash
+        run: |
+          echo "## SolidCraft full workshop oracle" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test group | Outcome |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for item in "Independent expectations|$ANALYTIC" "CLI build|$CLI" "Full oracle|$ORACLE"; do
+            label="${item%%|*}"
+            outcome="${item#*|}"
+            echo "| $label | $outcome |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$outcome" != "success" ]; then
+              failed=$((failed + 1))
+            fi
+          done
+          echo "**Groups not passing: $failed**" >> "$GITHUB_STEP_SUMMARY"
+          test "$failed" -eq 0
