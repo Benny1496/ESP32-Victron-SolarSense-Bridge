@@ -81,7 +81,7 @@ jobs:
           PYTHONUTF8: "1"
         run: |
           set -euo pipefail
-          python harness/.github/scripts/solidcraft-w23a-batch-runner-test16.py \
+          python harness/.github/scripts/solidcraft-w23a-batch-runner-test17.py \
             --cli solidcraft/target/ci/solidcraft-cli.exe \
             --source solidcraft \
             --out solidcraft/ci-reports/w23a-batch17 \
