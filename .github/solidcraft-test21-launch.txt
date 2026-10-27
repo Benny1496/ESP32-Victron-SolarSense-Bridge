@@ -1,0 +1,11 @@
+SolidCraft Windows batch TEST #21 explicitly authorized by user, 2026-10-27.
+Workflow .github/workflows/solidcraft-w23a-batch-windows-test21.yml
+Runner .github/scripts/solidcraft-w23a-batch-runner-test21.py
+TARGET: 124 ACTUAL distinct cases in ten suites:
+54 real W23a 3D model reference regression cases (old tests 11 through 19).
+8 real merged native W17a drawing view Rust tests (old test 20).
+62 NEW real native Rust tests: 15 drawing_sheet, 11 paper, 17 section, 13 title_block and 6 hidden line HLR.
+Window 90 min; per-suite safety cap 75 min; one pinned official SolidCraft CLI build plus targeted native geometry test execution.
+Upstream source read-only: tangency-labs/solidcraft drawings@ebafe07487df5cdd108e091db939de765645e5eb.
+Readiness and user-goal A01-A10 still NOT RUN for actual W12/W13/W14/W19 associative 3D-to-2D update API; do not count blocked cases among 124 successes.
+Prior GitHub Test20 #40565965821 completed/success 62/62; unchanged official sources or Golden files.
