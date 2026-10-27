@@ -1,0 +1,8 @@
+SolidCraft Windows regression Test #18
+Date 2026-10-27; user authorized immediate execution of Test #18.
+Workflow: .github/workflows/solidcraft-w23a-batch-windows-test18.yml
+Runner: .github/scripts/solidcraft-w23a-batch-runner-test18.py
+7 independent suites / 42 expected test cases / one CLI build.
+28 previously verified tests inherited from Test #17 + 14 new inspect.section view-only plane/flip/clear and parameter edit undo isolation tests.
+Official source: tangency-labs/solidcraft drawings@ebafe07487df5cdd108e091db939de765645e5eb read-only.
+No upstream changes; no golden blessing; do not claim W13/W14 actual associative 2D drawing update is implemented.
