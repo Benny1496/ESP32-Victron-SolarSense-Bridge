@@ -1,0 +1,75 @@
+# Manual-only W23a actual in-session 3D edit/undo/redo test (not a W13/W14 Drawing update test).
+name: SolidCraft W23a model identity (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-model-identity
+  cancel-in-progress: false
+
+jobs:
+  windows-model-identity:
+    name: Windows W23a geometry identity
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout our test harness
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Read-only pinned official drawings source
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: ebafe07487df5cdd108e091db939de765645e5eb
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Restore Windows Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w23a-model-identity
+
+      - name: Compile SolidCraft CLI
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo build --locked --profile ci -p solidcraft-cli
+
+      - name: Run same-session W23a model identity and undo tests
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          set -euo pipefail
+          mkdir -p ci-reports
+          git -C solidcraft rev-parse HEAD | tee ci-reports/source-commit.txt
+          rustc -vV | tee ci-reports/rust-version.txt
+          python .github/scripts/solidcraft-w23a-model-identity.py \
+            --cli solidcraft/target/ci/solidcraft-cli.exe \
+            --source solidcraft \
+            --out ci-reports
+
+      - name: Preserve logs and evidence even if a check fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-model-identity
+          path: ci-reports/
+          retention-days: 7
+          if-no-files-found: warn
