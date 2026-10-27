@@ -1,0 +1,125 @@
+# Temporary read-only CI on ESP32 repository while SolidCraft Actions are blocked.
+# Never pushes or changes the source SolidCraft fork.
+name: SolidCraft targeted atomic and rustfmt (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-targeted-validation
+  cancel-in-progress: false
+
+jobs:
+  atomic-undo:
+    name: Atomic Undo/Redo contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Read-only checkout of correction branch
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: fix/test-5-atomic-roundtrip
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+          components: rustfmt
+
+      - name: Cache Rust build dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-native-diagnostics
+
+      - name: Capture source commit
+        working-directory: solidcraft
+        run: |
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/commit.txt
+
+      - name: Run only atomic engine integration tests
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked --profile ci -p solidcraft-engine --test atomic_commands 2>&1 | tee ci-reports/atomic_commands.log
+
+      - name: Upload atomic test logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-test5-atomic-logs
+          path: solidcraft/ci-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  rustfmt-preview:
+    name: Verify formatting and export exact rustfmt patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Read-only checkout of correction branch
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: fix/test-5-atomic-roundtrip
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Rust 1.99.1 and rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+          components: rustfmt
+
+      - name: Capture commit and check baseline formatting
+        id: baseline_fmt
+        continue-on-error: true
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/commit.txt
+          set -o pipefail
+          cargo fmt --all -- --check 2>&1 | tee ci-reports/rustfmt-before.log
+
+      - name: Generate formatting patch without changing remote files
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          git diff --binary > ci-reports/rustfmt-1.99.1.patch
+          git diff --stat | tee ci-reports/rustfmt-stat.txt
+          git diff --check
+          cargo fmt --all -- --check
+          sha256sum ci-reports/rustfmt-1.99.1.patch | tee ci-reports/rustfmt-patch-sha256.txt
+
+      - name: Upload formatting diff and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-test5-rustfmt-review
+          path: solidcraft/ci-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Indicate if baseline requires a formatting commit
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.baseline_fmt.outcome }}" != "success" ]; then
+            echo "The original correction branch needs a formatting-only commit. Review the uploaded patch before applying it." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "The original correction branch already passes rustfmt." >> "$GITHUB_STEP_SUMMARY"
