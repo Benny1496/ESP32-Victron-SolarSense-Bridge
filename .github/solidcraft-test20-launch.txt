@@ -1,0 +1,11 @@
+SolidCraft Windows Test #20 – user-approved goal-directed W17a native Drawing foundation run
+Date: 2026-10-27
+Workflow: .github/workflows/solidcraft-w23a-batch-windows-test20.yml
+Existing W23a regression cases: 54 (8 independent suites).
+New real upstream W17a Native Rust drawing_view::tests:: cases: exactly 8 (9th suite).
+TOTAL: 62 actually executed test cases, nine suites; one official SolidCraft CLI build plus a targeted solidcraft-geom Rust test build.
+W12/W13/W14/W19 true model-to-drawing refresh integration: NOT RUN; explicitly separately reported.
+10 actual end-to-end acceptance scenarios: NOT RUN until genuine source binding / dimensions / update APIs exist.
+Read-only official SolidCraft branch pin: ebafe07487df5cdd108e091db939de765645e5eb
+GitHub Windows job budget: 90 minutes; per independent Python suite 75 minutes maximum.
+Do not count source readiness gates as passed tests or claim associative 3D-to-2D implementation.
