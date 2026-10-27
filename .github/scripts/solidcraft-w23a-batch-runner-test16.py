@@ -22,6 +22,9 @@ SUITES = (
   ("test16_six_stress_sequences","solidcraft-w23a-parameter-stress-test16.py",6),
 )
 SOURCE_SHA = "ebafe07487df5cdd108e091db939de765645e5eb"
+# GitHub Windows job timeout is 90 min. A 75-min per-suite cap leaves
+# room for compilation, failure summaries, and artifact upload.
+SUITE_TIMEOUT_SECONDS = 75 * 60
 
 def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -58,13 +61,13 @@ def main():
         try:
             p=subprocess.run(argv,cwd=str(source),capture_output=True,
                              encoding="utf-8",errors="replace",text=True,
-                             timeout=1800)
+                             timeout=SUITE_TIMEOUT_SECONDS)
             output=p.stdout+"\n"+p.stderr
             entry["exit_code"]=p.returncode
         except subprocess.TimeoutExpired as e:
             output=(e.stdout or b"").decode("utf-8","replace") if isinstance(e.stdout,bytes) else (e.stdout or "")
             entry["exit_code"]=-1
-            entry["exception"]="Test suite timed out after 1800 seconds"
+            entry["exception"]=f"Test suite timed out after {SUITE_TIMEOUT_SECONDS} seconds"
         except Exception as e:
             entry["exit_code"]=-1
             entry["exception"]=str(e)
