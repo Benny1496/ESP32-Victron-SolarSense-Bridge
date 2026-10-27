@@ -1,0 +1,93 @@
+# Manually triggered W23a identity/undo test on official SolidCraft drawings source.
+# No write access to upstream; not a W13/W14 drawing refresh implementation.
+name: SolidCraft W23a 3D identity - Windows (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-identity
+  cancel-in-progress: false
+
+jobs:
+  model-identity:
+    name: W23a model edits, stable IDs and undo/redo
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout harness from this repository
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Read-only official SolidCraft drawings checkout
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: ebafe07487df5cdd108e091db939de765645e5eb
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Restore Windows Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w23a-identity-windows
+
+      - name: Build pinned SolidCraft CLI
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          mkdir -p ci-reports/w23a
+          git rev-parse HEAD | tee ci-reports/w23a/source-commit.txt
+          rustc --version | tee ci-reports/w23a/rust-version.txt
+          python --version | tee ci-reports/w23a/python-version.txt
+          cargo build --locked --profile ci -p solidcraft-cli 2>&1 | tee ci-reports/w23a/build.log
+          test -f target/ci/solidcraft-cli.exe
+
+      - name: Verify W23a actual edits, analytic geometry, identity and undo
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          python harness/.github/scripts/solidcraft-w23a-model-identity.py \
+            --cli solidcraft/target/ci/solidcraft-cli.exe \
+            --source solidcraft \
+            --out solidcraft/ci-reports/w23a \
+            2>&1 | tee solidcraft/ci-reports/w23a/check-output.log
+
+      - name: Write test summary if available
+        if: always()
+        shell: bash
+        run: |
+          if test -f solidcraft/ci-reports/w23a/summary.json; then
+            python -c "import json; d=json.load(open('solidcraft/ci-reports/w23a/summary.json',encoding='utf-8')); print('W23a: '+d['status']+'; '+str(len(d['cases']))+' scenarios; '+str(d['failed'])+' failing')"
+          fi
+
+      - name: Keep original logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-model-identity-windows
+          path: solidcraft/ci-reports/w23a/
+          retention-days: 7
+          if-no-files-found: warn
