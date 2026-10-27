@@ -54,6 +54,7 @@ def inspect_faces_and_edges(faces_result, edges_result, radii, label):
         f = matches[0]
         name = f.get("name")
         assert isinstance(name, str) and name, f"{label}: unnamed cylindrical face of {bore}"
+        assert f.get("exact") is True, (f"{label}: {bore} face {name} has unverified geometric naming, not reliable history")
         edge_names = sorted({e["name"] for e in edges
                              if isinstance(e.get("name"), str) and name in e["name"].split("|")})
         assert edge_names, f"{label}: no named boundary edges for {bore} ({name})"
