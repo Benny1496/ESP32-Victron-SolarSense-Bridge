@@ -1,0 +1,9 @@
+SolidCraft Windows Test #15 – authorized launch
+2026-10-27. User explicitly approved preparation and immediate launch.
+Workflow: .github/workflows/solidcraft-w23a-post-reopen-windows-test15.yml
+Source: official tangency-labs/solidcraft drawings@ebafe07487df5cdd108e091db939de765645e5eb (read-only)
+Verified predecessor Test #14: run 40537219618, PASS two of two scenarios, 0 failures.
+Scenarios: 1) recreate Bore1 Ø10, save/reopen, resize Bore1New Ø12, undo/redo, save/reopen.
+2) recreate Bore1New Ø12, save/reopen, resize surviving Bore2 Ø10->Ø12, undo/redo, save/reopen.
+Check exact named half-cylinder surfaces, boundary edges, stable separate feature identities, no transfers from deleted Bore1, analytic volume/surface after every step.
+No changes to SolidCraft source, golden files, or production ESP32 firmware.
