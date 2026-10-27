@@ -1,0 +1,157 @@
+# Temporary manual SolidCraft follow-up runner while Actions in the SolidCraft fork are unavailable.
+# Rechecks historical Windows test families against the exact GREEN Test #6 source commit.
+# No pushes, no golden blessings, no source changes.
+name: SolidCraft Windows regression review (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-windows-review
+  cancel-in-progress: false
+
+jobs:
+  windows-undo-ui:
+    name: Windows undo, identity and drawing window guards
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Read-only checkout of verified SolidCraft Test 6
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 79fc8cb49ee653464283eda80870767e37d3fc07
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Restore Windows Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-windows-review
+
+      - name: Run contract tests with strict exit-code and test-count checks
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -u
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/source-commit.txt
+          rustc --version | tee ci-reports/rust-version.txt
+          failures=0
+          run_case() {
+            local label="$1"; shift
+            local expected="$1"; shift
+            local log="ci-reports/${label}.log"
+            echo "CHECK $label | $*" | tee -a ci-reports/commands.txt
+            "$@" > "$log" 2>&1
+            local code=$?
+            printf '%s exit=%s\n' "$label" "$code" | tee -a ci-reports/exits.txt
+            if [ "$code" -ne 0 ] || ! { if [ "$expected" = "ANY" ]; then grep -Eq "test result: ok\\. [1-9][0-9]* passed; 0 failed;" "$log"; else grep -Eq "test result: ok\\. ${expected} passed; 0 failed;" "$log"; fi; }; then
+              echo "FAIL $label (exit $code; expected $expected passing tests)"
+              tail -n 35 "$log"
+              failures=$((failures + 1))
+            else
+              echo "PASS $label (test count $expected)"
+            fi
+          }
+          run_case occurrence_id 1 cargo test --locked --profile ci -p solidcraft-engine --lib cmd::component::occurrence_tests::hostile_moves_copies_and_reused_ids_do_not_leak_state -- --exact
+          run_case computed_import_undo 1 cargo test --locked --profile ci -p solidcraft-engine --lib tests::computed_import_preserves_file_and_earlier_undo_history -- --exact
+          run_case atomic_roundtrip 3 cargo test --locked --profile ci -p solidcraft-engine --test atomic_commands
+          run_case agent_chat_undo 1 cargo test --locked --profile ci -p solidcraft-ui-egui --lib agent_chat::tests::a_messages_changes_undo_as_one_step -- --exact
+          run_case agent_chat_interrupt 1 cargo test --locked --profile ci -p solidcraft-ui-egui --lib agent_chat::tests::an_interrupted_turns_changes_undo_as_one_step -- --exact
+          run_case drawing_window_guard 1 cargo test --locked --profile ci -p solidcraft-ui-egui --lib ui_kit_guard_tests::floating_window_helper_has_only_its_live_consumers -- --exact
+          echo "FAILED_CHECKS=$failures" | tee -a ci-reports/exits.txt
+          echo "Windows undo / UI targeted failures: $failures" >> "$GITHUB_STEP_SUMMARY"
+          test "$failures" -eq 0
+
+      - name: Preserve results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-windows-undo-ui-review
+          path: solidcraft/ci-reports/
+          retention-days: 7
+          if-no-files-found: warn
+
+  windows-geometry:
+    name: Windows historical seed goldens and kernel topology
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Read-only checkout of verified SolidCraft Test 6
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 79fc8cb49ee653464283eda80870767e37d3fc07
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Restore Windows Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-windows-review
+
+      - name: Re-run four exact Windows golden seeds and topology suites
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -u
+          mkdir -p ci-reports
+          git rev-parse HEAD | tee ci-reports/source-commit.txt
+          rustc --version | tee ci-reports/rust-version.txt
+          failures=0
+          run_case() {
+            local label="$1"; shift
+            local expected="$1"; shift
+            local log="ci-reports/${label}.log"
+            echo "CHECK $label | $*" | tee -a ci-reports/commands.txt
+            "$@" > "$log" 2>&1
+            local code=$?
+            printf '%s exit=%s\n' "$label" "$code" | tee -a ci-reports/exits.txt
+            if [ "$code" -ne 0 ] || ! { if [ "$expected" = "ANY" ]; then grep -Eq "test result: ok\\. [1-9][0-9]* passed; 0 failed;" "$log"; else grep -Eq "test result: ok\\. ${expected} passed; 0 failed;" "$log"; fi; }; then
+              echo "FAIL $label (exit $code; expected $expected passing tests)"
+              tail -n 35 "$log"
+              failures=$((failures + 1))
+            else
+              echo "PASS $label"
+            fi
+          }
+          run_case seed_13 1 cargo test --locked --profile ci -p solidcraft-engine --lib tests::robustness_goldens::seed_13 -- --exact
+          run_case seed_23 1 cargo test --locked --profile ci -p solidcraft-engine --lib tests::robustness_goldens::seed_23 -- --exact
+          run_case seed_36 1 cargo test --locked --profile ci -p solidcraft-engine --lib tests::robustness_goldens::seed_36 -- --exact
+          run_case seed_67 1 cargo test --locked --profile ci -p solidcraft-engine --lib tests::robustness_goldens::seed_67 -- --exact
+          run_case kernel_library ANY cargo test --locked --profile ci -p solidcraft-kernel --lib
+          run_case topology_cli ANY cargo test --locked --profile ci -p solidcraft-cli --test rebuild_topology
+          echo "FAILED_CHECKS=$failures" | tee -a ci-reports/exits.txt
+          echo "Windows geometry / kernel targeted failures: $failures" >> "$GITHUB_STEP_SUMMARY"
+          test "$failures" -eq 0
+
+      - name: Preserve results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-windows-geometry-review
+          path: solidcraft/ci-reports/
+          retention-days: 7
+          if-no-files-found: warn
