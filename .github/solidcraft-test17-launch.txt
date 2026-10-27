@@ -1,0 +1,10 @@
+SolidCraft Windows batch Test #17 launch
+Date: 2026-10-27
+User requested directly that the next larger batch be prepared and started.
+Workflow: .github/workflows/solidcraft-w23a-batch-windows-test17.yml
+Orchestrator: .github/scripts/solidcraft-w23a-batch-runner-test17.py
+6 independent Python groups / 28 genuine scenarios / ONE pinned official CLI build
+16 retained baseline scenarios from successful Test #16 + 12 new width/length and bore-diameter mixed parameter sequences
+All multi-parameter edits checked against analytic volume/surface, two verified half-cylinder faces per bore and named edges, feature IDs, all undo/redo states, save/reopen.
+Official SolidCraft drawings source pinned read-only: ebafe07487df5cdd108e091db939de765645e5eb
+Previous Test #16 GitHub run 40544514291: PASS 16/16; no reference blessing or upstream source change.
