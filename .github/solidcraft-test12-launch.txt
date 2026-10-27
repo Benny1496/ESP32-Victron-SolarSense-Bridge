@@ -1,0 +1,6 @@
+SolidCraft Windows Test #12 launch request
+Date: 2026-10-27
+Workflow: .github/workflows/solidcraft-w23a-persistent-windows.yml
+Source: tangency-labs/solidcraft@ebafe07487df5cdd108e091db939de765645e5eb
+Scope: W23a face and edge names, in-session edit / undo / redo, save / reopen
+Trigger: push path restricted to this file; original user requested immediate next test.
