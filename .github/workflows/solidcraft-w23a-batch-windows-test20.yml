@@ -1,0 +1,117 @@
+# W23a integrated Windows batch: 9 groups, 62 source-design regression scenarios.
+# Single pinned Rust CLI build plus actual native W17a Rust unit test compilation; read-only SolidCraft.
+# Groups continue after an individual suite fails; all original evidence archived.
+name: SolidCraft W23a regression batch - Windows (test 20)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-test20-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-batch-test20
+  cancel-in-progress: false
+
+jobs:
+  w23a-batch:
+    name: 9 suites, 62 scenarios, single SolidCraft Windows build
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout external W23a test harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout pinned official SolidCraft drawings code, read-only
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: ebafe07487df5cdd108e091db939de765645e5eb
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Restore common Windows Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w23a-identity-windows
+
+      - name: Compile official SolidCraft CLI once
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          mkdir -p ci-reports/w23a-batch20
+          git rev-parse HEAD | tee ci-reports/w23a-batch20/source-commit.txt
+          rustc --version | tee ci-reports/w23a-batch20/rust-version.txt
+          python --version | tee ci-reports/w23a-batch20/python-version.txt
+          cargo build --locked --profile ci -p solidcraft-cli 2>&1 | tee ci-reports/w23a-batch20/build.log
+          test -f target/ci/solidcraft-cli.exe
+
+      - name: Preflight compile all Python test scripts and readiness probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in             solidcraft-w23a-model-identity.py             solidcraft-w23a-persistent-refs.py             solidcraft-w23a-replacement-test14.py             solidcraft-w23a-post-reopen-test15.py             solidcraft-w23a-parameter-stress-test16.py             solidcraft-w23a-mixed-parameter-test17.py             solidcraft-w23a-section-view-test18.py             solidcraft-w23a-section-active-history-test19.py             solidcraft-w17a-native-view-tests20.py             solidcraft-drawing-readiness-test20.py             solidcraft-w23a-batch-runner-test20.py; do
+            python -m py_compile "harness/.github/scripts/$f"
+          done
+
+      - name: Report actual Drawing API readiness without pretending W13/W14 passed
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          python harness/.github/scripts/solidcraft-drawing-readiness-test20.py \
+            --cli solidcraft/target/ci/solidcraft-cli.exe \
+            --source solidcraft \
+            --out solidcraft/ci-reports/w23a-batch20/drawing-readiness \
+            2>&1 | tee solidcraft/ci-reports/w23a-batch20/drawing-readiness-console.log
+
+      - name: Run 54 existing 3D cases and 8 real W17a Rust view tests
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          python harness/.github/scripts/solidcraft-w23a-batch-runner-test20.py \
+            --cli solidcraft/target/ci/solidcraft-cli.exe \
+            --source solidcraft \
+            --out solidcraft/ci-reports/w23a-batch20 \
+            2>&1 | tee solidcraft/ci-reports/w23a-batch20/batch-console.log
+
+      - name: Print aggregate results whether PASS or FAIL
+        if: always()
+        shell: bash
+        run: |
+          if test -f solidcraft/ci-reports/w23a-batch20/aggregate-summary.md; then
+            cat solidcraft/ci-reports/w23a-batch20/aggregate-summary.md
+          fi
+
+      - name: Save full 3D suite logs, native W17a results, readiness and aggregate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-batch20-full-results
+          path: solidcraft/ci-reports/w23a-batch20/
+          retention-days: 7
+          if-no-files-found: warn
