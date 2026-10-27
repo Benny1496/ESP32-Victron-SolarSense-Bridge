@@ -5,6 +5,15 @@ name: SolidCraft Windows regression review (manual)
 
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Choose Windows test areas'
+        required: true
+        default: geometry-only
+        type: choice
+        options:
+          - geometry-only
+          - all
 
 permissions:
   contents: read
@@ -15,6 +24,7 @@ concurrency:
 
 jobs:
   windows-undo-ui:
+    if: inputs.scope == 'all'
     name: Windows undo, identity and drawing window guards
     runs-on: windows-latest
     timeout-minutes: 90
