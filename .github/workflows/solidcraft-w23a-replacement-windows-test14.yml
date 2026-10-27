@@ -1,0 +1,98 @@
+# SolidCraft Windows Test 14: delete and replace a hole at the EXACT same XY.
+# A newly created hole must not inherit the old hole's exact face/edge identity.
+# No SolidCraft source or oracle fixture is changed; no W13/W14 drawing claim.
+name: SolidCraft W23a replacement lifecycle - Windows (test 14)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-test14-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-replacement-test14
+  cancel-in-progress: false
+
+jobs:
+  w23a-replacement:
+    name: Delete/recreate bore at same spot, undo, redo, save/reopen
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Read-only checkout of test harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Read-only checkout of official SolidCraft drawings
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: ebafe07487df5cdd108e091db939de765645e5eb
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Rust toolchain 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w23a-identity-windows
+
+      - name: Compile official SolidCraft CLI
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          mkdir -p ci-reports/w23a-replacement-test14
+          git rev-parse HEAD | tee ci-reports/w23a-replacement-test14/source-commit.txt
+          rustc --version | tee ci-reports/w23a-replacement-test14/rust-version.txt
+          python --version | tee ci-reports/w23a-replacement-test14/python-version.txt
+          cargo build --locked --profile ci -p solidcraft-cli 2>&1 | tee ci-reports/w23a-replacement-test14/build.log
+          test -f target/ci/solidcraft-cli.exe
+
+      - name: Real delete / recreate at same position with strict persistent B-rep identity
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          python -m py_compile harness/.github/scripts/solidcraft-w23a-replacement-test14.py
+          python harness/.github/scripts/solidcraft-w23a-replacement-test14.py \
+            --cli solidcraft/target/ci/solidcraft-cli.exe \
+            --source solidcraft \
+            --out solidcraft/ci-reports/w23a-replacement-test14 \
+            2>&1 | tee solidcraft/ci-reports/w23a-replacement-test14/check-output.log
+
+      - name: Summarize actual test results
+        if: always()
+        shell: bash
+        run: |
+          if test -f solidcraft/ci-reports/w23a-replacement-test14/summary.json; then
+            python -c "import json; d=json.load(open('solidcraft/ci-reports/w23a-replacement-test14/summary.json',encoding='utf-8')); print('W23a replacement: '+d['status']+'; '+str(len(d['scenarios']))+' scenarios; '+str(d['failed'])+' failing')"
+          fi
+
+      - name: Preserve complete outputs even when a check fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-replacement-lifecycle-test14
+          path: solidcraft/ci-reports/w23a-replacement-test14/
+          retention-days: 7
+          if-no-files-found: warn
