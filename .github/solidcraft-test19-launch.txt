@@ -1,0 +1,10 @@
+SolidCraft Windows regression batch Test #19 – EXPLICITLY USER-AUTHORIZED LAUNCH
+Date: 2026-10-27
+Workflow: .github/workflows/solidcraft-w23a-batch-windows-test19.yml
+Aggregator: .github/scripts/solidcraft-w23a-batch-runner-test19.py
+8 suites / 54 scenarios / ONE official pinned SolidCraft CLI Windows build.
+42 verified existing regressions from passing Test #18 + 12 new active-section multi-parameter history and two-save/reopen scenarios.
+GitHub job timeout 90 minutes, individual batch suite timeout 75 minutes.
+Pinned read-only upstream source: tangency-labs/solidcraft drawings@ebafe07487df5cdd108e091db939de765645e5eb
+All check artifacts retained. No changes to upstream SolidCraft source or golden fixtures.
+Do not infer that W13/W14 live 2D associative drawings are implemented by these 3D tests.
