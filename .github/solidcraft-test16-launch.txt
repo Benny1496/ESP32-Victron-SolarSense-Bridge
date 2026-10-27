@@ -1,0 +1,8 @@
+SolidCraft Windows batch Test #16 – 5 suites, 16 scenarios
+2026-10-27. User requests larger tests with more coverage per run, following approved in-chat test launch workflow.
+Official source: tangency-labs/solidcraft@ebafe07487df5cdd108e091db939de765645e5eb (read only).
+Workflow: .github/workflows/solidcraft-w23a-batch-windows-test16.yml
+One cargo build, five existing/new Python suites, independent group execution, aggregate summary, full logs.
+Regression Test #11 (3), Test #13 (3), Test #14 (2), Test #15 (2).
+New parameter stress matrix (6) with multiple edits, full undo/redo and save/reopen.
+Expected: 16 cases, 0 errors, no source modification or blessed reference files.
