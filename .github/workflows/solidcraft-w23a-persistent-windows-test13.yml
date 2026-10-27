@@ -1,5 +1,6 @@
 # Isolated W23a persistent B-rep naming and design save/reopen regression.
-# Independent follow-up of Test #12: grouped TWO exact half-cylinder surfaces per physical bore.\n# Push marker launches once while manual workflow_dispatch remains available.
+# Independent follow-up of Test #12: TWO exact half-cylinder faces per physical bore.
+# A designated push marker launches the run, or it can be started manually.
 # Official SolidCraft sources remain read-only; nothing is blessed or pushed upstream.
 name: SolidCraft W23a persistent references - Windows (test 13)
 
@@ -73,7 +74,7 @@ jobs:
           PYTHONUTF8: "1"
         run: |
           set -euo pipefail
-          python harness/.github/scripts/solidcraft-w23a-persistent-13-refs.py \
+          python harness/.github/scripts/solidcraft-w23a-persistent-refs.py \
             --cli solidcraft/target/ci/solidcraft-cli.exe \
             --source solidcraft \
             --out solidcraft/ci-reports/w23a-persistent-13 \
