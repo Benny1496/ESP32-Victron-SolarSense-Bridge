@@ -40,7 +40,11 @@ def inspect_faces_and_edges(faces_result, edges_result, radii, label):
     edges = edges_result["edges"]
     assert isinstance(faces, list) and isinstance(edges, list), f"{label}: invalid response"
     cylinders = [f for f in faces if isinstance(f.get("cylinder"), dict)]
-    assert len(cylinders) == len(radii), f"{label}: {len(cylinders)} cylinders, expected {len(radii)}"
+    # Verified against Test #12's original JSON: SolidCraft's W23a through-hole
+    # geometry consists of TWO exact, named half-cylinder faces PER physical bore.
+    assert len(cylinders) == 2 * len(radii), (
+        f"{label}: {len(cylinders)} cylinder patches, expected {2 * len(radii)} "
+        f"for {len(radii)} physical bores")
     found = {}
     for bore, rad in radii.items():
         x, y = XY[bore]
@@ -50,18 +54,28 @@ def inspect_faces_and_edges(faces_result, edges_result, radii, label):
                    and len(f["cylinder"]["origin"]) >= 2
                    and near(f["cylinder"]["origin"][0], x)
                    and near(f["cylinder"]["origin"][1], y)]
-        assert len(matches) == 1, f"{label}: {bore} expected one radius {rad} at {(x,y)}, got {matches}"
-        f = matches[0]
-        name = f.get("name")
-        assert isinstance(name, str) and name, f"{label}: unnamed cylindrical face of {bore}"
-        assert f.get("exact") is True, (f"{label}: {bore} face {name} has unverified geometric naming, not reliable history")
+        assert len(matches) == 2, (
+            f"{label}: {bore} expected two half-cylinder faces of radius {rad} at {(x, y)}, "
+            f"got {[f.get('name') for f in matches]}")
+        face_names = sorted(f.get("name") for f in matches)
+        assert all(isinstance(name, str) and name for name in face_names), (
+            f"{label}: {bore} has an unnamed cylindrical face")
+        assert len(set(face_names)) == 2, f"{label}: {bore} half-cylinder face names aliased"
+        assert all(f.get("exact") is True for f in matches), (
+            f"{label}: {bore} faces are not all backed by verified face history: "
+            f"{[(f.get('name'), f.get('exact')) for f in matches]}")
         edge_names = sorted({e["name"] for e in edges
-                             if isinstance(e.get("name"), str) and name in e["name"].split("|")})
-        assert edge_names, f"{label}: no named boundary edges for {bore} ({name})"
-        found[bore] = {"face": name, "exact": f.get("exact") is True,
-                       "edges": edge_names, "radius": f["cylinder"]["radius"],
-                       "index": f.get("index")}
-    assert len(set(p["face"] for p in found.values())) == len(found), f"{label}: bore faces aliased"
+                             if isinstance(e.get("name"), str)
+                             and any(name in e["name"].split("|") for name in face_names)})
+        assert len(edge_names) >= 4, (
+            f"{label}: insufficient named boundary edges for {bore}: {edge_names}")
+        found[bore] = {
+            "faces": face_names, "exact": True, "edges": edge_names,
+            "radius": rad, "indices_diagnostic_only": [f.get("index") for f in matches]
+        }
+    all_names = [name for v in found.values() for name in v["faces"]]
+    assert len(set(all_names)) == 2 * len(radii), (
+        f"{label}: a cylindrical face was silently assigned to two physical bores")
     return found
 
 def inspect_state(replies, positions, label, radii, expected):
@@ -85,18 +99,25 @@ def verify_refs(label, before, current, surviving):
     for bore in surviving:
         original = before["bore_refs"][bore]
         latest = current["bore_refs"][bore]
-        assert original["face"] == latest["face"], (
-            f"{label}: {bore} persistent face changed {original['face']} => {latest['face']}")
+        assert original["faces"] == latest["faces"], (
+            f"{label}: {bore} persistent face names changed "
+            f"{original['faces']} => {latest['faces']}")
         assert set(original["edges"]) == set(latest["edges"]), (
-            f"{label}: {bore} edge names changed {original['edges']} => {latest['edges']}")
-        assert original["exact"] == latest["exact"], f"{label}: {bore} history verification changed"
-        assert before["ids"][bore] == current["ids"][bore], f"{label}: {bore} feature ID changed"
-    for disappeared in set(before["bore_refs"])-set(surviving):
-        forbidden = before["bore_refs"][disappeared]["face"]
-        assert all(info["face"] != forbidden for info in current["bore_refs"].values()), (
+            f"{label}: {bore} edge names changed "
+            f"{original['edges']} => {latest['edges']}")
+        assert original["exact"] and latest["exact"], (
+            f"{label}: {bore} lost certified face history")
+        assert before["ids"][bore] == current["ids"][bore], (
+            f"{label}: {bore} feature ID changed")
+    for disappeared in set(before["bore_refs"]) - set(surviving):
+        forbidden = set(before["bore_refs"][disappeared]["faces"])
+        remaining = {name for ref in current["bore_refs"].values()
+                     for name in ref["faces"]}
+        assert forbidden.isdisjoint(remaining), (
             f"{label}: deleted {disappeared} face silently reused")
         assert disappeared not in current["ids"], f"{label}: deleted feature still present"
-    assert before["ids"]["Stock"] == current["ids"]["Stock"], f"{label}: stock feature ID changed"
+    assert before["ids"]["Stock"] == current["ids"]["Stock"], (
+        f"{label}: stock feature ID changed")
 
 def main():
     p=argparse.ArgumentParser()
@@ -143,7 +164,7 @@ def main():
             after=inspect_state(responses,positions[1],scenario+"/after",radii,expected)
             undone=inspect_state(responses,positions[2],scenario+"/undo",{"Bore1":5.0,"Bore2":5.0},base_expected)
             redone=inspect_state(responses,positions[3],scenario+"/redo",radii,expected)
-            assert before["bore_refs"]["Bore1"]["face"] != before["bore_refs"]["Bore2"]["face"]
+            assert set(before["bore_refs"]["Bore1"]["faces"]).isdisjoint(set(before["bore_refs"]["Bore2"]["faces"]))
             verify_refs(scenario+"/edit",before,after,set(radii))
             verify_refs(scenario+"/undo",before,undone,{"Bore1","Bore2"})
             verify_refs(scenario+"/redo",before,redone,set(radii))
@@ -159,8 +180,8 @@ def main():
             assert len(reopened)==4
             persisted=inspect_state(reopened,[0,1,2,3],scenario+"/reopen",radii,expected)
             verify_refs(scenario+"/reopen",before,persisted,set(radii))
-            assert {k:v["face"] for k,v in redone["bore_refs"].items()} == {
-                k:v["face"] for k,v in persisted["bore_refs"].items()},f"{scenario}: post-reopen face mismatch"
+            assert {k:v["faces"] for k,v in redone["bore_refs"].items()} == {
+                k:v["faces"] for k,v in persisted["bore_refs"].items()},f"{scenario}: post-reopen face mismatch"
             result["cases"][scenario]={"status":"PASS",
                  "before":before,"edited":after,"undo":undone,"redo":redone,"reopened":persisted}
             print(f"PASS {scenario}: named face/edge identities, geometry, undo/redo and save/reopen",flush=True)
