@@ -1,0 +1,8 @@
+SolidCraft Windows Test #13 - explicit launch
+Date: 2026-10-27
+Previous failed GitHub run: 40526139782 (Test #12)
+Failure analysis: each physical bore has two exact, named half-cylinder B-rep surfaces. Test #12's expected count was wrong.
+Corrected test harness: .github/scripts/solidcraft-w23a-persistent-refs.py @ c3a2ecbfcbb3602668f07acb60152d881cbb5dc0
+Workflow: .github/workflows/solidcraft-w23a-persistent-windows-test13.yml
+Pinned upstream SolidCraft drawings: ebafe07487df5cdd108e091db939de765645e5eb
+Expected: 3 actual model-edit scenarios + undo/redo + certified face/edge identities + save/reopen. No golden blessing or upstream changes.
