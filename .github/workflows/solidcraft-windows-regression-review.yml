@@ -1,5 +1,5 @@
 # Temporary manual SolidCraft follow-up runner while Actions in the SolidCraft fork are unavailable.
-# Rechecks historical Windows test families against the exact GREEN Test #6 source commit.
+# Rechecks historical Windows tests and can compare current upstream MSVC geometry goldens.
 # No pushes, no golden blessings, no source changes.
 name: SolidCraft Windows regression review (manual)
 
@@ -14,6 +14,7 @@ on:
         options:
           - geometry-only
           - baseline-geometry
+          - upstream-geometry
           - all
 
 permissions:
@@ -101,15 +102,15 @@ jobs:
           if-no-files-found: warn
 
   windows-geometry:
-    name: Windows historical seed goldens and kernel topology
+    name: Windows seed goldens and optional kernel topology
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
       - name: Read-only checkout of pinned SolidCraft source
         uses: actions/checkout@v4
         with:
-          repository: Benny1496/solidcraft
-          ref: ${{ inputs.scope == 'baseline-geometry' && '79f2a63870c7b8db29913b96464b92a6055bbc37' || '79fc8cb49ee653464283eda80870767e37d3fc07' }}
+          repository: ${{ inputs.scope == 'upstream-geometry' && 'tangency-labs/solidcraft' || 'Benny1496/solidcraft' }}
+          ref: ${{ inputs.scope == 'upstream-geometry' && '9cba66c14d38d17504d0c3efb9e04194435743b7' || (inputs.scope == 'baseline-geometry' && '79f2a63870c7b8db29913b96464b92a6055bbc37' || '79fc8cb49ee653464283eda80870767e37d3fc07') }}
           path: solidcraft
           persist-credentials: false
 
@@ -160,11 +161,11 @@ jobs:
           run_case seed_23 1 cargo test --locked --profile ci -p solidcraft-engine --lib tests::robustness_goldens::seed_23 -- --exact
           run_case seed_36 1 cargo test --locked --profile ci -p solidcraft-engine --lib tests::robustness_goldens::seed_36 -- --exact
           run_case seed_67 1 cargo test --locked --profile ci -p solidcraft-engine --lib tests::robustness_goldens::seed_67 -- --exact
-          if [ "${{ inputs.scope }}" != "baseline-geometry" ]; then
+          if [ "${{ inputs.scope }}" != "baseline-geometry" ] && [ "${{ inputs.scope }}" != "upstream-geometry" ]; then
             run_case kernel_library ANY cargo test --locked --profile ci -p solidcraft-kernel --lib
             run_case topology_cli ANY cargo test --locked --profile ci -p solidcraft-cli --test rebuild_topology
           else
-            echo "BASELINE SOURCE: skip previously checked kernel and CLI suites" | tee -a ci-reports/exits.txt
+            echo "GEOMETRY ONLY SOURCE: skip unrelated kernel and CLI suites" | tee -a ci-reports/exits.txt
           fi
           echo "FAILED_CHECKS=$failures" | tee -a ci-reports/exits.txt
           echo "Windows geometry / kernel targeted failures: $failures" >> "$GITHUB_STEP_SUMMARY"
