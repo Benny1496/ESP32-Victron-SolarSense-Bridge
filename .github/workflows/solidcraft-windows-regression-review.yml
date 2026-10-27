@@ -55,8 +55,12 @@ jobs:
             local expected="$1"; shift
             local log="ci-reports/${label}.log"
             echo "CHECK $label | $*" | tee -a ci-reports/commands.txt
-            "$@" > "$log" 2>&1
-            local code=$?
+            local code
+            if "$@" > "$log" 2>&1; then
+              code=0
+            else
+              code=$?
+            fi
             printf '%s exit=%s\n' "$label" "$code" | tee -a ci-reports/exits.txt
             if [ "$code" -ne 0 ] || ! { if [ "$expected" = "ANY" ]; then grep -Eq "test result: ok\\. [1-9][0-9]* passed; 0 failed;" "$log"; else grep -Eq "test result: ok\\. ${expected} passed; 0 failed;" "$log"; fi; }; then
               echo "FAIL $label (exit $code; expected $expected passing tests)"
@@ -126,8 +130,12 @@ jobs:
             local expected="$1"; shift
             local log="ci-reports/${label}.log"
             echo "CHECK $label | $*" | tee -a ci-reports/commands.txt
-            "$@" > "$log" 2>&1
-            local code=$?
+            local code
+            if "$@" > "$log" 2>&1; then
+              code=0
+            else
+              code=$?
+            fi
             printf '%s exit=%s\n' "$label" "$code" | tee -a ci-reports/exits.txt
             if [ "$code" -ne 0 ] || ! { if [ "$expected" = "ANY" ]; then grep -Eq "test result: ok\\. [1-9][0-9]* passed; 0 failed;" "$log"; else grep -Eq "test result: ok\\. ${expected} passed; 0 failed;" "$log"; fi; }; then
               echo "FAIL $label (exit $code; expected $expected passing tests)"
