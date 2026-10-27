@@ -1,0 +1,97 @@
+# Windows Test #15: 3D source reference integrity after save/reopen and further edits.
+# Dedicated launch marker, no upstream writes, no oracle blessing, not drawing W13/W14.
+name: SolidCraft W23a post-reopen edits - Windows (test 15)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-test15-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-post-reopen-test15
+  cancel-in-progress: false
+
+jobs:
+  source-lifecycle:
+    name: Two-process edit / undo / redo and second reopen
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout external read-only test scripts
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout pinned official SolidCraft drawings
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: ebafe07487df5cdd108e091db939de765645e5eb
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Restore Windows Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w23a-identity-windows
+
+      - name: Compile pinned SolidCraft CLI
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          mkdir -p ci-reports/w23a-post-reopen-test15
+          git rev-parse HEAD | tee ci-reports/w23a-post-reopen-test15/source-commit.txt
+          rustc --version | tee ci-reports/w23a-post-reopen-test15/rust-version.txt
+          python --version | tee ci-reports/w23a-post-reopen-test15/python-version.txt
+          cargo build --locked --profile ci -p solidcraft-cli 2>&1 | tee ci-reports/w23a-post-reopen-test15/build.log
+          test -f target/ci/solidcraft-cli.exe
+
+      - name: Verify edits after save/reopen and exact persistent references
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          python -m py_compile harness/.github/scripts/solidcraft-w23a-post-reopen-test15.py
+          python harness/.github/scripts/solidcraft-w23a-post-reopen-test15.py \
+            --cli solidcraft/target/ci/solidcraft-cli.exe \
+            --source solidcraft \
+            --out solidcraft/ci-reports/w23a-post-reopen-test15 \
+            2>&1 | tee solidcraft/ci-reports/w23a-post-reopen-test15/check-output.log
+
+      - name: Summarize run even on failing cases
+        if: always()
+        shell: bash
+        run: |
+          if test -f solidcraft/ci-reports/w23a-post-reopen-test15/summary.json; then
+            python -c "import json; d=json.load(open('solidcraft/ci-reports/w23a-post-reopen-test15/summary.json',encoding='utf-8')); print('Test 15 W23a: '+d['status']+'; '+str(len(d['scenarios']))+' scenarios, '+str(d['failed'])+' failures')"
+          fi
+
+      - name: Retain all proof files and error logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-post-reopen-test15
+          path: solidcraft/ci-reports/w23a-post-reopen-test15/
+          retention-days: 7
+          if-no-files-found: warn
