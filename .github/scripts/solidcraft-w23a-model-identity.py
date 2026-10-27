@@ -67,6 +67,29 @@ def main():
     commands = json.loads(converted).get("commands")
     assert isinstance(commands, list) and len(commands) > 3
     assert sum(1 for row in commands if row.get("command") == "solid.hole") == 2
+    oracle_expected = {
+        "baseline": source / "tests/oracle/84-plate-two-bores/expected.json",
+        "width_80_to_100": source / "tests/oracle/85-plate-width-100/expected.json",
+        "bore1_10_to_12": source / "tests/oracle/86-plate-first-bore-12/expected.json",
+        "delete_bore1": source / "tests/oracle/87-plate-bore1-deleted/expected.json",
+    }
+    expectations = {label: json.loads(file.read_text(encoding="utf-8"))
+                    for label, file in oracle_expected.items()}
+
+    def check_measure(label, result, target):
+        expected = expectations[target]
+        assert result.get("body_count") == 1 and len(result.get("bodies", [])) == 1, (
+            f"{label}: expected one solid body")
+        assert not result["bodies"][0].get("error"), f"{label}: measurement failed"
+        for field in ("volume_mm3", "area_mm2"):
+            actual = result["total"].get(field)
+            want = expected[field]
+            assert isinstance(actual, (int, float)), f"{label}: missing {field}"
+            assert abs(actual - want) <= max(0.001, abs(want) * 0.001), (
+                f"{label}: {field} {actual} != analytic {want}")
+        return {"volume_mm3": result["total"]["volume_mm3"],
+                "area_mm2": result["total"]["area_mm2"], "oracle_case": target}
+
     cases = {
         "width_80_to_100": (
             cmd("parameters.change", {"name": "width", "expression": "100 mm"}),
@@ -82,12 +105,16 @@ def main():
     for label, (change, exists, expected_params) in cases.items():
         steps = list(commands)
         marks = []
-        for extra in (cmd("document.inspect"), change, cmd("document.inspect"),
-                      cmd("edit.undo"), cmd("document.inspect"),
-                      cmd("edit.redo"), cmd("document.inspect")):
+        measure_marks = []
+        for extra in (cmd("document.inspect"), cmd("inspect.measure"),
+                      change, cmd("document.inspect"), cmd("inspect.measure"),
+                      cmd("edit.undo"), cmd("document.inspect"), cmd("inspect.measure"),
+                      cmd("edit.redo"), cmd("document.inspect"), cmd("inspect.measure")):
             steps.append(extra)
             if extra["command"] == "document.inspect":
                 marks.append(len(steps)-1)
+            elif extra["command"] == "inspect.measure":
+                measure_marks.append(len(steps)-1)
         path = out / (label + "-script.json")
         path.write_text(json.dumps({"commands": steps}, indent=2, ensure_ascii=False), encoding="utf-8")
         dest = out / (label + "-results.json")
@@ -104,12 +131,21 @@ def main():
             compare(label+"/changed", before, after, exists)
             compare(label+"/undo", before, undone, ("Bore1", "Bore2"))
             compare(label+"/redo", before, redone, exists)
+            before_m, after_m, undone_m, redone_m = (responses[index] for index in measure_marks)
+            measurements = {
+                "before": check_measure(label+"/before", before_m, "baseline"),
+                "after": check_measure(label+"/after", after_m, label),
+                "undo": check_measure(label+"/undo", undone_m, "baseline"),
+                "redo": check_measure(label+"/redo", redone_m, label),
+            }
+            assert abs(measurements["after"]["volume_mm3"]-measurements["before"]["volume_mm3"]) > 100, (
+                f"{label}: edit did not change measured volume")
             for name, expected in expected_params.items():
                 assert after["params"].get(name) == expected, f"{label}: changed {name} mismatch"
                 assert redone["params"].get(name) == expected, f"{label}: redo {name} mismatch"
                 assert undone["params"].get(name) == before["params"].get(name), f"{label}: undo {name} mismatch"
             summary["cases"][label] = {"status": "PASS", "baseline": before, "edit": after,
-                                        "undo": undone, "redo": redone}
+                                        "undo": undone, "redo": redone, "measurements": measurements}
             print(f"PASS {label} (actual edit, feature identities, undo/redo)", flush=True)
         except Exception as ex:
             summary["cases"][label] = {"status": "FAIL", "error": str(ex), "traceback": traceback.format_exc()}
