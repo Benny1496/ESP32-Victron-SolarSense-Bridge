@@ -1,0 +1,9 @@
+SolidCraft test #26 - explicitly requested launch on 2026-10-28.
+Workflow: .github/workflows/solidcraft-drawing-storage-windows-test26.yml
+Runner: .github/scripts/solidcraft-drawing-storage-test26.py
+Official read-only PR source: CamWight/solidcraft@36cf48a3f64c530a128f5d794f37b7cfa24cc3ab (#3891).
+Planned: 420 UNIQUE native Rust tests in 37 groups, 176 new source-checked cases.
+One shared cargo test --locked --no-run build for geom, doc, io, engine.
+Limits: 90 minutes GitHub job; 75 minutes each test group.
+Not claimed: W13/W14/W19 automatic 3D-to-2D drawing refresh end-to-end (NOT_RUN).
+No ESP32 firmware or upstream SolidCraft changes.
