@@ -1,0 +1,105 @@
+# External Windows test harness for official SolidCraft PR #3891; no firmware changes.
+name: SolidCraft K4 Drawing and persistent references - Windows (test 25)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-test25-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-drawing-storage-test25
+  cancel-in-progress: false
+
+jobs:
+  native-drawing-and-references:
+    name: 244 distinct Rust tests, 24 groups, single Cargo build
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout external test harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout pinned CamWight code read-only
+        uses: actions/checkout@v4
+        with:
+          repository: CamWight/solidcraft
+          ref: 36cf48a3f64c530a128f5d794f37b7cfa24cc3ab
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w23a-identity-windows
+
+      - name: Preflight SHA and runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p solidcraft/ci-reports/drawing-storage-test25
+          python -m py_compile harness/.github/scripts/solidcraft-drawing-storage-test24.py harness/.github/scripts/solidcraft-drawing-storage-test25.py
+          cd solidcraft
+          git rev-parse HEAD | tee ci-reports/drawing-storage-test25/source-commit.txt
+          test "$(git rev-parse HEAD)" = "36cf48a3f64c530a128f5d794f37b7cfa24cc3ab"
+
+      - name: Build Doc, IO, Engine and Geom native tests exactly once
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-doc -p solidcraft-io -p solidcraft-engine -p solidcraft-geom --lib --no-run 2>&1 | tee ci-reports/drawing-storage-test25/build.log
+          for crate in solidcraft_doc solidcraft_io solidcraft_engine solidcraft_geom; do
+            test -n "$(find target/debug/deps -maxdepth 1 -name "${crate}-*.exe" -print -quit)"
+          done
+
+      - name: Run 244 native Rust cases in 24 suites (75-minute cap each)
+        shell: bash
+        env:
+          PYTHONUTF8: '1'
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          python harness/.github/scripts/solidcraft-drawing-storage-test25.py \
+            --source solidcraft \
+            --out solidcraft/ci-reports/drawing-storage-test25 \
+            2>&1 | tee solidcraft/ci-reports/drawing-storage-test25/runner-console.log
+
+      - name: Print actual aggregate result
+        if: always()
+        shell: bash
+        run: |
+          if test -f solidcraft/ci-reports/drawing-storage-test25/aggregate-summary.md; then
+            cat solidcraft/ci-reports/drawing-storage-test25/aggregate-summary.md
+          else
+            echo 'No verified test result generated. Inspect build/preflight logs.'
+          fi
+
+      - name: Upload original logs and JSON even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-drawing-storage-test25-full-results
+          path: solidcraft/ci-reports/drawing-storage-test25/
+          retention-days: 7
+          if-no-files-found: warn
