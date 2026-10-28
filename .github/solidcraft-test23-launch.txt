@@ -1,0 +1,7 @@
+SolidCraft Drawing Test #23 - user-authorized Windows batch
+Date: 2026-10-28
+Runner: .github/workflows/solidcraft-drawing-storage-windows-test23.yml
+Pinned source: CamWight/solidcraft@36cf48a3f64c530a128f5d794f37b7cfa24cc3ab (tangency-labs/solidcraft PR #3891)
+Expected real Rust tests: 52 UNIQUE tests, 6 groups, no simulations; 90-minute GitHub job and 75 minutes per group.
+Scope: embedded drawing persistence, real K4 drawing create/open/inspect/edit/save, Undo/Redo, IO and file regression tests.
+W13/W14 automatic 3D to 2D updates and W19 drawing dimensions: NOT_RUN.
