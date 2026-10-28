@@ -1,0 +1,7 @@
+SolidCraft drawing storage native Windows Test #22
+Launched by user request on 2026-10-28.
+Workflow: .github/workflows/solidcraft-drawing-storage-windows-test22.yml
+Source: CamWight/solidcraft@472a330691f89fe58e90e65665bd035927c07ca0 (PR tangency-labs/solidcraft#7490)
+Purpose: native 26 drawing persistence, document and container regression tests.
+Expected: real Rust test output + full artifacts, 90 min job and 75 min per group.
+W13/W14 automatic 3D->2D update and lost-dimension notification: NOT_RUN.
