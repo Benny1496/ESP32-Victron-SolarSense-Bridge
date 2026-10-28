@@ -1,0 +1,10 @@
+SolidCraft 244-case Windows test #25 - explicit user-authorized launch
+Date: 2026-10-28
+Workflow: .github/workflows/solidcraft-drawing-storage-windows-test25.yml
+Runner: .github/scripts/solidcraft-drawing-storage-test25.py
+Pinned source: CamWight/solidcraft@36cf48a3f64c530a128f5d794f37b7cfa24cc3ab (PR tangency-labs/solidcraft#3891)
+Expected: 244 distinct real native Rust tests, 24 suites, one combined Cargo test build
+Limits: 90 minutes total GitHub job; 75 minutes per test group
+Scope: existing Drawing K4 + model parameter edit, face/edge identity, loss of projections and Undo regressions.
+Actual W13/W14/W19 associative drawing refresh E2E: NOT_RUN.
+No SolidCraft upstream modifications. No ESP32 firmware modifications.
