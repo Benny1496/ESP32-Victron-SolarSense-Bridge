@@ -1,0 +1,109 @@
+# External Windows verification of CamWight PR #3891, pinned to its actual head.
+# 52 distinct upstream Rust tests, three test binaries built with ONE cargo command.
+# No SolidCraft upstream changes, no ESP32 firmware writes, no simulated W13/W14 PASS.
+name: SolidCraft W15 drawing commands, storage and Undo - Windows (test 23)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-test23-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-drawing-storage-test23
+  cancel-in-progress: false
+
+jobs:
+  drawing-storage:
+    name: PR 3891 drawing - 6 suites, 52 real Rust tests, single Cargo build
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout read-only external test harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout exact CamWight PR 3891 code, read-only
+        uses: actions/checkout@v4
+        with:
+          repository: CamWight/solidcraft
+          ref: 36cf48a3f64c530a128f5d794f37b7cfa24cc3ab
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Restore shared Windows Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w23a-identity-windows
+
+      - name: Preflight actual source SHA and test runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p solidcraft/ci-reports/drawing-storage-test23
+          python -m py_compile harness/.github/scripts/solidcraft-drawing-storage-test23.py
+          cd solidcraft
+          git rev-parse HEAD | tee ci-reports/drawing-storage-test23/source-commit.txt
+          test "$(git rev-parse HEAD)" = "36cf48a3f64c530a128f5d794f37b7cfa24cc3ab"
+          rustc --version | tee ci-reports/drawing-storage-test23/rust-version.txt
+          python --version | tee ci-reports/drawing-storage-test23/python-version.txt
+
+      - name: Compile native Doc, IO and Engine test binaries together exactly once
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-doc -p solidcraft-io -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/drawing-storage-test23/build.log
+          test -n "$(find target/debug/deps -maxdepth 1 -name 'solidcraft_doc-*.exe' -print -quit)"
+          test -n "$(find target/debug/deps -maxdepth 1 -name 'solidcraft_io-*.exe' -print -quit)"
+          test -n "$(find target/debug/deps -maxdepth 1 -name 'solidcraft_engine-*.exe' -print -quit)"
+
+      - name: Run 52 native Rust tests in 6 focused groups, 75 minutes per group
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+          RUST_BACKTRACE: "1"
+        run: |
+          set -euo pipefail
+          python harness/.github/scripts/solidcraft-drawing-storage-test23.py \
+            --source solidcraft \
+            --out solidcraft/ci-reports/drawing-storage-test23 \
+            2>&1 | tee solidcraft/ci-reports/drawing-storage-test23/runner-console.log
+
+      - name: Print aggregate result also after failure
+        if: always()
+        shell: bash
+        run: |
+          if test -f solidcraft/ci-reports/drawing-storage-test23/aggregate-summary.md; then
+            cat solidcraft/ci-reports/drawing-storage-test23/aggregate-summary.md
+          else
+            echo "No aggregate summary. Check preflight/build logs; DO NOT report tests as PASS."
+          fi
+
+      - name: Upload exact source SHA, full native logs and result JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-drawing-storage-test23-full-results
+          path: solidcraft/ci-reports/drawing-storage-test23/
+          retention-days: 7
+          if-no-files-found: warn
