@@ -1,0 +1,13 @@
+SolidCraft W23a TEST #41 LAUNCH, 2026-10-30
+Workflow: .github/workflows/solidcraft-w23a-model-drawing-test41.yml
+Test source: .github/scripts/solidcraft-w23a-t41-model-drawing-matrix.rs
+Source: pinned tangency-labs/solidcraft drawings@fefca6bfa0c295408f66c4859bb8204ab0560552
+Acceptance: pinned Benny1496/solidcraft W23a Draft PR #8288@5dc72344b3da09951b4e7df6f3178d5c950cf0b9
+64 genuine native Rust tests (40 proven Test40 regressions, +16 new parameter matrix cases, +8 targeted shared-document model/drawing stress cases)
+32 model matrix combinations: two bore diameters and plate width, with two drawing views, CAD volume, model undo/redo, preserved dimensions and authored drawing record.
+Eight new scenario tests: equal-volume hole swap must change scenes; width round-trip; bore diameter round-trip; authored text persistent through width edits; lost+undo after two edits; Bore2 session last_good after width edits; individual undo order; repeated close/reopen with unequal hole dimensions.
+Respect public model command contract drawing.close -> inspect.measure -> drawing.open.
+One common SolidCraft engine build; workflow timeout 90 min, test group target <75 min; preserve GitHub logs and artifacts even on failure.
+Only external test harness modified; no ESP32 product firmware or official SolidCraft source/PR #8288 changed.
+Not covered: automatic U2 UI refresh, rendered paper dimensions, true persistent E2E-04 save/reopen.
+Do not claim passing until GitHub job is complete and original logs are verified.
