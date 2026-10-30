@@ -1,0 +1,5 @@
+Test30 real W23a original Oracle #84 – 2026-10-30.
+Pinned official source fefca6bfa0c295408f66c4859bb8204ab0560552.
+Pinned W23a acceptance PR HEAD 5dc72344b3da09951b4e7df6f3178d5c950cf0b9.
+Convert original 84-plate-two-bores/recipe.json via official CLI, replay real sketch/extrude/solid.hole in Session, add top drawing/view dimensions, test E2E-01 and 02 early inspect subsets plus undo/redo early subset.
+Check actual 3D volume against original analytic 84, 86 and 87 oracles. Full U2/R5 drawing update still NOT_RUN.
