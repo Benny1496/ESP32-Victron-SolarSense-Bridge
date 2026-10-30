@@ -1,0 +1,118 @@
+# Native verification of proposed production-repository Rust tests for CamWight's runnable E2E-01 and E2E-02 subsets.
+# Uses the seven TESTS AS COMMITTED in Benny1496/solidcraft (no test injection, no generated CLI fixture).
+name: SolidCraft W23a official-suite candidates (7 native tests)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-official-candidates-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-official-candidates-native
+  cancel-in-progress: false
+
+jobs:
+  w23a-official-tests:
+    name: Seven focused E2E-01/E2E-02 native acceptance tests from SolidCraft fork
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout technical ESP32 runner
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout pinned SolidCraft fork candidate tests
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: e1fbc7e1b1eaf683eef467ed7f68c710d949a77b
+          path: solidcraft
+          fetch-depth: 6
+          persist-credentials: false
+
+      - name: Install pinned Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Restore engine compile cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: w23a-official-candidates-seven-native
+
+      - name: Verify exact source and registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=solidcraft/ci-reports/w23a-official-candidates
+          mkdir -p "$out"
+          test "$(git -C solidcraft rev-parse HEAD)" = "e1fbc7e1b1eaf683eef467ed7f68c710d949a77b"
+          git -C solidcraft rev-parse HEAD | tee "$out/source-sha.txt"
+          git -C harness rev-parse HEAD | tee "$out/runner-sha.txt"
+          python - <<'PY' | tee "$out/structure.txt"
+          import json, pathlib, re
+          root=pathlib.Path("solidcraft")
+          lib=(root/"crates/engine/src/lib.rs").read_text()
+          rust=(root/"crates/engine/src/w23a_model_edit_acceptance_tests.rs").read_text()
+          fixture=root/"tests/fixtures/w23a-drawing-updates/oracle84-commands.json"
+          commands=json.loads(fixture.read_text())["commands"]
+          names=re.findall(r"(?m)^fn (w23a_official_[a-z0-9_]+)\(",rust)
+          assert len(names)==7 and len(set(names))==7,names
+          assert 'mod w23a_model_edit_acceptance_tests;' in lib
+          assert 'include_str!("../../../tests/fixtures/w23a-drawing-updates/oracle84-commands.json")' in rust
+          assert len(commands)==25
+          assert sum(s["command"]=="solid.hole" for s in commands)==2
+          assert 'ci-reports/' not in rust
+          print("W23A_OFFICIAL_CANDIDATES_STRUCTURE_OK=7")
+          for name in names: print("CANDIDATE",name)
+          PY
+          echo "Runner: ESP32 repository Actions; test source: pinned SolidCraft fork commit e1fbc7e1b1eaf683eef467ed7f68c710d949a77b" | tee "$out/provenance.txt"
+          echo "E2E-01/E2E-02 command/engine subsets only; U2 UI, rendered annotation and full E2E04 file reopen NOT_RUN." | tee -a "$out/provenance.txt"
+          echo "90-minute job maximum; focused test group planned under 75 minutes, no synthetic delays." | tee -a "$out/provenance.txt"
+
+      - name: Compile real engine library tests including seven committed W23a candidates
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/w23a-official-candidates/build.log
+
+      - name: Execute seven official-suite native candidate tests
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib w23a_official_ -- --nocapture 2>&1 | tee ci-reports/w23a-official-candidates/7-tests.log
+          grep -Eq 'test result: ok\. 7 passed; 0 failed;' ci-reports/w23a-official-candidates/7-tests.log
+          echo "W23A_OFFICIAL_CANDIDATES_NATIVE_PASS=7 FAIL=0" | tee ci-reports/w23a-official-candidates/summary.txt
+
+      - name: Show native outcome
+        if: always()
+        shell: bash
+        run: |
+          cat solidcraft/ci-reports/w23a-official-candidates/structure.txt 2>/dev/null || true
+          cat solidcraft/ci-reports/w23a-official-candidates/summary.txt 2>/dev/null || true
+          grep -E 'w23a_official_|test result:|^error' solidcraft/ci-reports/w23a-official-candidates/7-tests.log 2>/dev/null || true
+
+      - name: Preserve test artifacts including failed results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-official-7-candidate-results
+          path: solidcraft/ci-reports/w23a-official-candidates/
+          retention-days: 7
+          if-no-files-found: warn
