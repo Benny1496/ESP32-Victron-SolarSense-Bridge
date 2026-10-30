@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   w23a-two-bore-inspect:
-    name: W23a Test29: corrected feature input case; Bore1 diameter 10 to 12, lost references and undo
+    name: 'W23a Test29: corrected feature input case; Bore1 diameter 10 to 12, lost references and undo'
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
