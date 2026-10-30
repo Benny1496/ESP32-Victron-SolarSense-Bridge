@@ -1,0 +1,4 @@
+Start Test #33 on 2026-10-30. New CamWight issue #4892 update comment ID 6522518442 confirms drawing_scene::extract and ::step exist, but U2 automatic UI and text painting do not.
+Run official source drawings@fefca6bfa0c295408f66c4859bb8204ab0560552 with W23a workshop original oracle 84 (Sketch, Extrude, two holes) plus oracle85.
+8 native tests: 6 previous oracle dimension/text tests and 2 new actual Scene provider tests: a diameter Ø10 to Ø12 and Bore1 deletion/undo change/restore the scene lines, while build equals extract+step and dimensions inspect correctly.
+No claim to automatic UI updates or drawn annotations; full E2E-04 Save/Reopen NOT_RUN. GitHub Test repo only, no ESP32 firmware or official PR changed. 90 min max.
