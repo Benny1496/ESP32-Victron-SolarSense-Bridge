@@ -1,0 +1,1 @@
+Start SolidCraft test28 two-bore drawing dimension W19d W20a real integration. Source pinned fefca6bfa0c295408f66c4859bb8204ab0560552. Own PR 8288 pinned 5dc72344b3da09951b4e7df6f3178d5c950cf0b9. Test built from passing Test27, no firmware modifications. 2026-10-30.
