@@ -1,0 +1,127 @@
+# SolidCraft W23a first real two-bore model-to-drawing inspect probes.
+# External read-only checkout of official drawings; temporary Rust test module injected for CI only.
+name: SolidCraft W23a two-bore dimension inspect integration (test 28)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-test28-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-test28-two-bore-dimension
+  cancel-in-progress: false
+
+jobs:
+  w23a-two-bore-inspect:
+    name: Real 100x80x20 plate, Bore1/Bore2, W19d/W20a E2E-01 and E2E-02 inspect subsets
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout external test harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout pinned official drawings source
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: fefca6bfa0c295408f66c4859bb8204ab0560552
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Checkout pinned W23a draft acceptance PR for static validator
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 5dc72344b3da09951b4e7df6f3178d5c950cf0b9
+          path: acceptance
+          persist-credentials: false
+
+      - name: Install pinned Rust and Python
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Restore common engine build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w19d-w20a-dimensions
+
+      - name: Pin and validate source, acceptance fixtures and temporary test module
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=solidcraft/ci-reports/w23a-test28
+          mkdir -p "$out"
+          test "$(git -C solidcraft rev-parse HEAD)" = "fefca6bfa0c295408f66c4859bb8204ab0560552"
+          test "$(git -C acceptance rev-parse HEAD)" = "5dc72344b3da09951b4e7df6f3178d5c950cf0b9"
+          git -C solidcraft rev-parse HEAD > "$out/official-source-sha.txt"
+          git -C acceptance rev-parse HEAD > "$out/acceptance-sha.txt"
+          git -C harness rev-parse HEAD > "$out/harness-sha.txt"
+          cp harness/.github/scripts/solidcraft-w23a-t28-native-tests.rs solidcraft/crates/engine/src/w23a_t28_integration_tests.rs
+          printf '\n#[cfg(test)]\nmod w23a_t28_integration_tests;\n' >> solidcraft/crates/engine/src/lib.rs
+          mkdir -p solidcraft/tests/fixtures/w23a-drawing-updates
+          cp acceptance/tests/fixtures/w23a-drawing-updates/{README.md,cases.json,validate.py} solidcraft/tests/fixtures/w23a-drawing-updates/
+          rustc --version | tee "$out/rust-version.txt"
+          python --version | tee "$out/python-version.txt"
+          echo "NOTE: 3D model is an equivalent 100x80x20 solid.box with two 10mm cylinder cuts, not the original Sketch/Hole W23a recipe." | tee "$out/scope.txt"
+          echo "NOTE: Tests exercise public drawing.dimension APIs against actual model edits, NOT full deferred drawing view refresh/U2." | tee -a "$out/scope.txt"
+
+      - name: Re-run exact W23a static validator from draft PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          python solidcraft/tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee solidcraft/ci-reports/w23a-test28/static-validator.log
+
+      - name: Build engine native tests once with external two-bore probe
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/w23a-test28/build.log
+
+      - name: Run two real early W23a model-to-dimension integration cases
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib w23a_t28_ -- --nocapture 2>&1 | tee ci-reports/w23a-test28/two-bore-tests.log
+          grep -Eq 'test result: ok\. 2 passed; 0 failed;' ci-reports/w23a-test28/two-bore-tests.log
+          echo "EARLY_API_SUBSETS_PASS=2 FAIL=0" | tee ci-reports/w23a-test28/summary.txt
+          echo "Complete original W23a oracle-model 3D-to-2D view E2E-01..04: NOT_RUN" | tee -a ci-reports/w23a-test28/summary.txt
+
+      - name: Print summary
+        if: always()
+        shell: bash
+        run: |
+          cat solidcraft/ci-reports/w23a-test28/static-validator.log 2>/dev/null || true
+          cat solidcraft/ci-reports/w23a-test28/summary.txt 2>/dev/null || true
+          grep -E '^test .*w23a_t28_|^test result:|^error' solidcraft/ci-reports/w23a-test28/two-bore-tests.log 2>/dev/null || true
+
+      - name: Preserve detailed test evidence even if a case fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-test28-two-bore-results
+          path: solidcraft/ci-reports/w23a-test28/
+          retention-days: 7
+          if-no-files-found: warn
