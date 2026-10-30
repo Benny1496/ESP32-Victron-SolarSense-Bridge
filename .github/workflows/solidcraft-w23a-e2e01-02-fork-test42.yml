@@ -1,0 +1,178 @@
+# W23a Test42: 128 real native E2E-01/02 engine acceptance tests, fork-owned source.
+# Runner is external ESP32 GitHub Actions; source, fixture and tests are pinned in SolidCraft fork.
+name: SolidCraft W23a E2E-01/02 128-case fork source (test 42)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-test42-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-fork-test42-e2e01-02
+  cancel-in-progress: false
+
+jobs:
+  w23a-two-bore-inspect:
+    name: 'W23a Test42: 128 real E2E01/02, two-view and undo checks from pinned SolidCraft fork'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout external test harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout pinned Benny1496 SolidCraft fork test42 branch commit
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: f6dddeccbb29a675a49c4896975c1532d24a4a3b
+          path: solidcraft
+          fetch-depth: 5
+          persist-credentials: false
+
+      - name: Checkout pinned W23a draft acceptance PR for static validator
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 5dc72344b3da09951b4e7df6f3178d5c950cf0b9
+          path: acceptance
+          persist-credentials: false
+
+      - name: Install pinned Rust and Python
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Restore common engine build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w19d-w20a-dimensions
+
+      - name: Pin and validate source, acceptance fixtures and temporary test module
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=solidcraft/ci-reports/w23a-test42
+          mkdir -p "$out"
+          test "$(git -C solidcraft rev-parse HEAD)" = "f6dddeccbb29a675a49c4896975c1532d24a4a3b"
+          test "$(git -C acceptance rev-parse HEAD)" = "5dc72344b3da09951b4e7df6f3178d5c950cf0b9"
+          git -C solidcraft rev-parse HEAD > "$out/fork-source-sha.txt"
+          git -C solidcraft diff --quiet fefca6bfa0c295408f66c4859bb8204ab0560552 HEAD -- crates Cargo.toml Cargo.lock || { echo "Production-source files differ from pinned official Oracle84 baseline"; exit 1; }
+          echo "PRODUCTION_SOURCE_UNCHANGED_VS_OFFICIAL_DRAWINGS_BASELINE" | tee "$out/production-source-check.txt"
+          git -C acceptance rev-parse HEAD > "$out/acceptance-sha.txt"
+          git -C harness rev-parse HEAD > "$out/harness-sha.txt"
+          cp solidcraft/tests/evidence/w23a/test-42/w23a_t42_integration_tests.rs solidcraft/crates/engine/src/w23a_t42_integration_tests.rs
+          printf '\n#[cfg(test)]\nmod w23a_t42_integration_tests;\n' >> solidcraft/crates/engine/src/lib.rs
+          mkdir -p solidcraft/tests/fixtures/w23a-drawing-updates
+          cp acceptance/tests/fixtures/w23a-drawing-updates/{README.md,cases.json,validate.py} solidcraft/tests/fixtures/w23a-drawing-updates/
+          rustc --version | tee "$out/rust-version.txt"
+          python --version | tee "$out/python-version.txt"
+          python - <<'PY' | tee "$out/test42-suite-structure.txt"
+          import pathlib, re
+          path = pathlib.Path("solidcraft/crates/engine/src/w23a_t42_integration_tests.rs")
+          s = path.read_text(encoding="utf8")
+          macro = re.findall(r"(?m)^w42_matrix!\(w23a_t42_", s)
+          joint = re.findall(r"(?m)^w42_e2e01_02!\(w23a_t42_", s)
+          named = re.findall(r"(?m)^fn w23a_t42_", s)
+          assert (len(macro), len(joint), len(named)) == (32, 64, 32), (len(macro), len(joint), len(named))
+          assert "w23a_t41_" not in s
+          print("TEST42_SUITE_STRUCTURE_OK=128 (32 oracle matrix + 32 targeted + 64 E2E-01/02 dual-view probes)")
+          PY
+          echo "NOTE: Source is real Oracle84 100x80x20 StockSketch + solid.extrude + two solid.hole features converted by the pinned official SolidCraft CLI." | tee "$out/scope.txt"
+          echo "NOTE: Rust fixture path resolved from CARGO_MANIFEST_DIR; tests exercise immediate dimension.inspect, NOT U2 view refresh." | tee -a "$out/scope.txt"
+          echo "Runner repository: Benny1496/ESP32-Victron-SolarSense-Bridge; source: fork Benny1496/solidcraft@f6dddeccbb29a675a49c4896975c1532d24a4a3b" | tee -a "$out/scope.txt"
+          echo "Native Rust group target 75 min; job limit 90 min; no artificial waiting." | tee -a "$out/scope.txt"
+
+      - name: Re-run exact W23a static validator from draft PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          python solidcraft/tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee solidcraft/ci-reports/w23a-test42/static-validator.log
+
+      - name: Build actual SolidCraft CLI to interpret official W23a recipe
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo build --locked --profile ci -p solidcraft-cli 2>&1 | tee ci-reports/w23a-test42/cli-build.log
+          test -f target/ci/solidcraft-cli.exe
+
+      - name: Convert actual Oracle 84 into real SolidCraft commands
+        shell: bash
+        working-directory: solidcraft
+        run: |
+          set -euo pipefail
+          target/ci/solidcraft-cli.exe recipe tests/oracle/84-plate-two-bores/recipe.json > ci-reports/w23a-test42/oracle84-commands.json
+          python -c 'import json; v=json.load(open("ci-reports/w23a-test42/oracle84-commands.json",encoding="utf8")); c=v["commands"]; assert len(c)>3; assert sum(x["command"]=="solid.hole" for x in c)==2; assert any(x["command"]=="solid.extrude" for x in c); print("REAL_ORACLE84_COMMANDS_OK",len(c))' 2>&1 | tee ci-reports/w23a-test42/oracle-preflight.log
+
+      - name: Preflight true Oracle84 model using actual CLI before compiling Rust tests
+        shell: bash
+        working-directory: solidcraft
+        run: |
+          set -euo pipefail
+          python -c 'import json,pathlib; p=pathlib.Path("ci-reports/w23a-test42"); d=json.loads((p/"oracle84-commands.json").read_text(encoding="utf8")); d["commands"].append({"command":"inspect.measure","params":{}}); (p/"oracle84-cli-preflight-input.json").write_text(json.dumps(d,indent=2),encoding="utf8")'
+          target/ci/solidcraft-cli.exe run ci-reports/w23a-test42/oracle84-cli-preflight-input.json --results --json-out ci-reports/w23a-test42/oracle84-cli-preflight-results.json 2>&1 | tee ci-reports/w23a-test42/oracle84-cli-preflight.log
+          python -c 'import json,pathlib; p=pathlib.Path("ci-reports/w23a-test42"); a=json.loads((p/"oracle84-cli-preflight-results.json").read_text(encoding="utf8")); assert len(a)==26,len(a); r=a[-1]; v=r["total"]["volume_mm3"]; e=156858.4073464102; assert r["body_count"]==1 and abs(v-e)<e*.001,(v,e); print("REAL_ORACLE84_CLI_BASELINE_PASS",v)'
+
+      - name: Confirm original Oracle 85 width-change target is available
+        shell: bash
+        working-directory: solidcraft
+        run: |
+          set -euo pipefail
+          python -c 'import json; p="tests/oracle/85-plate-width-100/expected.json"; v=json.load(open(p,encoding="utf8")); assert v["body_count"] == 1; assert abs(v["volume_mm3"]-196858.4073464102)<0.01; print("ORACLE85_REFERENCE_PASS")' 2>&1 | tee ci-reports/w23a-test42/oracle85-preflight.log
+
+      - name: Build engine native tests once with real original oracle integration
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/w23a-test42/build.log
+
+      - name: Run one group of 128 native W23a E2E-01/02 tests from fork
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib w23a_t42_ -- --nocapture 2>&1 | tee ci-reports/w23a-test42/two-bore-tests.log
+          grep -Eq 'test result: ok\. 128 passed; 0 failed;' ci-reports/w23a-test42/two-bore-tests.log
+          echo "NATIVE_W23A_E2E01_02_FORK_PASS=128 FAIL=0" | tee ci-reports/w23a-test42/summary.txt
+          echo "W23a Test42: 128 native Rust tests: 64 preserved Test41 plus 64 new real E2E01/02 combined edit/delete/undo/redo cases; source from pinned Benny1496/solidcraft fork. Runner on ESP32 Actions ONLY. Full official acceptance, persisted file save/reopen E2E04, U2 UI and rendered dimensions NOT_RUN." | tee -a ci-reports/w23a-test42/summary.txt
+
+      - name: Print summary
+        if: always()
+        shell: bash
+        run: |
+          cat solidcraft/ci-reports/w23a-test42/static-validator.log 2>/dev/null || true
+          cat solidcraft/ci-reports/w23a-test42/summary.txt 2>/dev/null || true
+          grep -E '^test .*w23a_t42_|^test result:|^error' solidcraft/ci-reports/w23a-test42/two-bore-tests.log 2>/dev/null || true
+
+      - name: Preserve detailed test evidence even if a case fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-test42-fork-e2e01-02-128-results
+          path: solidcraft/ci-reports/w23a-test42/
+          retention-days: 7
+          if-no-files-found: warn
