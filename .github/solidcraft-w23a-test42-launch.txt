@@ -1,0 +1,13 @@
+SolidCraft W23a Test #42 / 128-case official E2E-01 and E2E-02 runnable subsets
+Date: 2026-10-30
+GIT SOURCE OF TRUTH: Benny1496/solidcraft branch test/w23a-e2e01-02-test42 pinned f6dddeccbb29a675a49c4896975c1532d24a4a3b
+Source file in fork: tests/evidence/w23a/test-42/w23a_t42_integration_tests.rs
+README in fork: tests/evidence/w23a/test-42/README.md
+Official production code base: tangency-labs/solidcraft drawings fefca6bfa0c295408f66c4859bb8204ab0560552 (no changes under crates, Cargo.toml or Cargo.lock).
+Separate official W23a Draft PR #8288 pinned acceptance fixtures at 5dc72344b3da09951b4e7df6f3178d5c950cf0b9, unchanged.
+EXTERNAL CI RUNNER: Benny1496/ESP32-Victron-SolarSense-Bridge workflow .github/workflows/solidcraft-w23a-e2e01-02-fork-test42.yml.
+Native Rust test count: 128 (64 preserved proven baseline, 64 new true E2E01/02 acceptance subset cases: 8 widths ×4 bore pairs ×2 deletion orders); real public commands, real 3D CAD, two views and undo/redo.
+Workflow job timeout 90 minutes; native test group target <= 75 minutes; single Rust test compilation, no synthetic waiting.
+Report verified pass/fail only after original job log inspection.
+Important exclusions: real drawing UI U2 automatic updates, paper dimensions, full official four E2E flows, E2E04 actual saved file reopen and historical last_good.
+This runner is not a native GitHub Actions run inside the SolidCraft fork. Do not misrepresent where Actions executed.
