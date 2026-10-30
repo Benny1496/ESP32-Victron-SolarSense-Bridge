@@ -1,0 +1,148 @@
+# Isolated Windows verification of merged W19d/W20a drawing dimension APIs and our draft PR #8288.
+# NO firmware/ESP32 changes and NO W13/W14 implementation or runtime E2E PASS claims.
+name: SolidCraft W19d W20a early dimension checks (test 27)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-w19d-w20a-test27-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w19d-w20a-test27
+  cancel-in-progress: false
+
+jobs:
+  dimension-api-check:
+    name: Static W23a contract + five real W19d/W20a native Rust tests
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout external harness (no firmware build)
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout exact official drawings source
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: fefca6bfa0c295408f66c4859bb8204ab0560552
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Checkout exact reviewed acceptance PR head
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 5dc72344b3da09951b4e7df6f3178d5c950cf0b9
+          path: acceptance
+          persist-credentials: false
+
+      - name: Install Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w19d-w20a-dimensions
+
+      - name: Verify pinned revisions and copy PR test contract only into disposable checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C solidcraft rev-parse HEAD)" = "fefca6bfa0c295408f66c4859bb8204ab0560552"
+          test "$(git -C acceptance rev-parse HEAD)" = "5dc72344b3da09951b4e7df6f3178d5c950cf0b9"
+          mkdir -p solidcraft/ci-reports/w19d-w20a-test27
+          mkdir -p solidcraft/tests/fixtures/w23a-drawing-updates
+          cp acceptance/tests/fixtures/w23a-drawing-updates/{README.md,cases.json,validate.py} solidcraft/tests/fixtures/w23a-drawing-updates/
+          git -C solidcraft rev-parse HEAD > solidcraft/ci-reports/w19d-w20a-test27/source-sha.txt
+          git -C acceptance rev-parse HEAD > solidcraft/ci-reports/w19d-w20a-test27/acceptance-sha.txt
+          rustc --version > solidcraft/ci-reports/w19d-w20a-test27/rust-version.txt
+          python --version > solidcraft/ci-reports/w19d-w20a-test27/python-version.txt
+
+      - name: Actually execute our PR Python static contract validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile solidcraft/tests/fixtures/w23a-drawing-updates/validate.py
+          python solidcraft/tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee solidcraft/ci-reports/w19d-w20a-test27/static-validator.log
+
+      - name: Compile official engine native Rust tests once
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/w19d-w20a-test27/build.log
+
+      - name: Run five relevant existing dimension Rust tests with separate logs
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+          RUST_BACKTRACE: '1'
+        run: |
+          set -uo pipefail
+          out="ci-reports/w19d-w20a-test27"
+          names=(
+            a_dimension_follows_a_change_and_its_undo
+            a_circle_and_an_arc_read_their_radius_and_diameter
+            lost_and_suppressed_say_so_and_never_move_to_other_geometry
+            a_radial_dimension_reads_a_hole_and_an_edit_makes_it_a_diameter
+            a_dimension_that_cant_be_measured_gives_its_last_good_value
+          )
+          pass=0
+          fail=0
+          : > "$out/native-summary.txt"
+          for name in "${names[@]}"; do
+            logfile="$out/${name}.log"
+            echo "Starting Rust test: $name"
+            if cargo test --locked -p solidcraft-engine --lib "$name" -- --nocapture > "$logfile" 2>&1; then
+              if grep -Eq 'test result: ok\. 1 passed; 0 failed;' "$logfile"; then
+                echo "PASS $name" | tee -a "$out/native-summary.txt"
+                pass=$((pass+1))
+              else
+                echo "FAIL (zero or wrong count) $name" | tee -a "$out/native-summary.txt"
+                fail=$((fail+1))
+              fi
+            else
+              echo "FAIL (nonzero cargo exit) $name" | tee -a "$out/native-summary.txt"
+              fail=$((fail+1))
+            fi
+            grep -E '^test result:|^error:' "$logfile" | tail -n 8 || true
+          done
+          echo "NATIVE_TESTS_PASS=$pass FAIL=$fail TOTAL=5" | tee -a "$out/native-summary.txt"
+          echo "Full W23a model-edit-to-drawing E2E-01..04: NOT_RUN" | tee -a "$out/native-summary.txt"
+          if test "$pass" -ne 5 || test "$fail" -ne 0; then exit 1; fi
+
+      - name: Print result summaries
+        if: always()
+        shell: bash
+        run: |
+          cat solidcraft/ci-reports/w19d-w20a-test27/static-validator.log 2>/dev/null || true
+          cat solidcraft/ci-reports/w19d-w20a-test27/native-summary.txt 2>/dev/null || true
+
+      - name: Preserve all evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w19d-w20a-test27-results
+          path: solidcraft/ci-reports/w19d-w20a-test27/
+          retention-days: 7
+          if-no-files-found: warn
