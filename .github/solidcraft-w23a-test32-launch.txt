@@ -1,0 +1,4 @@
+Start Test 32 on 2026-10-30. Pinned source drawings@fefca6bfa0c295408f66c4859bb8204ab0560552 and PR8288@5dc72344b3da09951b4e7df6f3178d5c950cf0b9.
+Recheck three Test31 PASS cases plus three new original-Oracle-84/85 W19d/W20a regression cases: width 80->100 model change and undo/redo, dimension text.at authored sheet coordinates surviving diameter edit+undo/redo, bore deletion+undo+redo with text position and Bore2 protection.
+Strict scope: immediate drawing.dimension.inspect and authored records only, NOT fully rendered deferred drawing update W13/W14/U2 or save/reopen historical last_good.
+Windows CI max 90 min; logs even on failure. No ESP32 firmware or official PR changes.
