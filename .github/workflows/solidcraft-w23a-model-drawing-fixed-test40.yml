@@ -1,0 +1,162 @@
+# SolidCraft W23a first real two-bore model-to-drawing inspect probes.
+# External read-only checkout of official drawings; temporary Rust test module injected for CI only.
+name: SolidCraft W23a model/drawing matrix corrected (test 40)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-test40-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-test40-original-oracle
+  cancel-in-progress: false
+
+jobs:
+  w23a-two-bore-inspect:
+    name: 'W23a Test40: forty original oracle checks, 16 model matrix variations and design undo'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout external test harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout pinned official drawings source
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: fefca6bfa0c295408f66c4859bb8204ab0560552
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Checkout pinned W23a draft acceptance PR for static validator
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 5dc72344b3da09951b4e7df6f3178d5c950cf0b9
+          path: acceptance
+          persist-credentials: false
+
+      - name: Install pinned Rust and Python
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Restore common engine build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w19d-w20a-dimensions
+
+      - name: Pin and validate source, acceptance fixtures and temporary test module
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=solidcraft/ci-reports/w23a-test40
+          mkdir -p "$out"
+          test "$(git -C solidcraft rev-parse HEAD)" = "fefca6bfa0c295408f66c4859bb8204ab0560552"
+          test "$(git -C acceptance rev-parse HEAD)" = "5dc72344b3da09951b4e7df6f3178d5c950cf0b9"
+          git -C solidcraft rev-parse HEAD > "$out/official-source-sha.txt"
+          git -C acceptance rev-parse HEAD > "$out/acceptance-sha.txt"
+          git -C harness rev-parse HEAD > "$out/harness-sha.txt"
+          cp harness/.github/scripts/solidcraft-w23a-t40-model-drawing-matrix-fixed.rs solidcraft/crates/engine/src/w23a_t40_integration_tests.rs
+          printf '\n#[cfg(test)]\nmod w23a_t40_integration_tests;\n' >> solidcraft/crates/engine/src/lib.rs
+          mkdir -p solidcraft/tests/fixtures/w23a-drawing-updates
+          cp acceptance/tests/fixtures/w23a-drawing-updates/{README.md,cases.json,validate.py} solidcraft/tests/fixtures/w23a-drawing-updates/
+          rustc --version | tee "$out/rust-version.txt"
+          python --version | tee "$out/python-version.txt"
+          echo "NOTE: Source is real Oracle84 100x80x20 StockSketch + solid.extrude + two solid.hole features converted by the pinned official SolidCraft CLI." | tee "$out/scope.txt"
+          echo "NOTE: Rust fixture path resolved from CARGO_MANIFEST_DIR; tests exercise immediate dimension.inspect, NOT U2 view refresh." | tee -a "$out/scope.txt"
+
+      - name: Re-run exact W23a static validator from draft PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          python solidcraft/tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee solidcraft/ci-reports/w23a-test40/static-validator.log
+
+      - name: Build actual SolidCraft CLI to interpret official W23a recipe
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo build --locked --profile ci -p solidcraft-cli 2>&1 | tee ci-reports/w23a-test40/cli-build.log
+          test -f target/ci/solidcraft-cli.exe
+
+      - name: Convert actual Oracle 84 into real SolidCraft commands
+        shell: bash
+        working-directory: solidcraft
+        run: |
+          set -euo pipefail
+          target/ci/solidcraft-cli.exe recipe tests/oracle/84-plate-two-bores/recipe.json > ci-reports/w23a-test40/oracle84-commands.json
+          python -c 'import json; v=json.load(open("ci-reports/w23a-test40/oracle84-commands.json",encoding="utf8")); c=v["commands"]; assert len(c)>3; assert sum(x["command"]=="solid.hole" for x in c)==2; assert any(x["command"]=="solid.extrude" for x in c); print("REAL_ORACLE84_COMMANDS_OK",len(c))' 2>&1 | tee ci-reports/w23a-test40/oracle-preflight.log
+
+      - name: Preflight true Oracle84 model using actual CLI before compiling Rust tests
+        shell: bash
+        working-directory: solidcraft
+        run: |
+          set -euo pipefail
+          python -c 'import json,pathlib; p=pathlib.Path("ci-reports/w23a-test40"); d=json.loads((p/"oracle84-commands.json").read_text(encoding="utf8")); d["commands"].append({"command":"inspect.measure","params":{}}); (p/"oracle84-cli-preflight-input.json").write_text(json.dumps(d,indent=2),encoding="utf8")'
+          target/ci/solidcraft-cli.exe run ci-reports/w23a-test40/oracle84-cli-preflight-input.json --results --json-out ci-reports/w23a-test40/oracle84-cli-preflight-results.json 2>&1 | tee ci-reports/w23a-test40/oracle84-cli-preflight.log
+          python -c 'import json,pathlib; p=pathlib.Path("ci-reports/w23a-test40"); a=json.loads((p/"oracle84-cli-preflight-results.json").read_text(encoding="utf8")); assert len(a)==26,len(a); r=a[-1]; v=r["total"]["volume_mm3"]; e=156858.4073464102; assert r["body_count"]==1 and abs(v-e)<e*.001,(v,e); print("REAL_ORACLE84_CLI_BASELINE_PASS",v)'
+
+      - name: Confirm original Oracle 85 width-change target is available
+        shell: bash
+        working-directory: solidcraft
+        run: |
+          set -euo pipefail
+          python -c 'import json; p="tests/oracle/85-plate-width-100/expected.json"; v=json.load(open(p,encoding="utf8")); assert v["body_count"] == 1; assert abs(v["volume_mm3"]-196858.4073464102)<0.01; print("ORACLE85_REFERENCE_PASS")' 2>&1 | tee ci-reports/w23a-test40/oracle85-preflight.log
+
+      - name: Build engine native tests once with real original oracle integration
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/w23a-test40/build.log
+
+      - name: Run forty true W23a native model/drawing shared-document tests
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib w23a_t40_ -- --nocapture 2>&1 | tee ci-reports/w23a-test40/two-bore-tests.log
+          grep -Eq 'test result: ok\. 40 passed; 0 failed;' ci-reports/w23a-test40/two-bore-tests.log
+          echo "NATIVE_SHARED_DESIGN_MATRIX_FIXED_PASS=40 FAIL=0" | tee ci-reports/w23a-test40/summary.txt
+          echo "W23a Test40 corrected Test39: temporarily close drawing for public inspect.measure as engine explicitly requires. Same 40 real Rust tests including 16 matrix variants and shared design record/undo. Full save/reopen E2E-04, U2 UI and rendered dimensions NOT_RUN." | tee -a ci-reports/w23a-test40/summary.txt
+
+      - name: Print summary
+        if: always()
+        shell: bash
+        run: |
+          cat solidcraft/ci-reports/w23a-test40/static-validator.log 2>/dev/null || true
+          cat solidcraft/ci-reports/w23a-test40/summary.txt 2>/dev/null || true
+          grep -E '^test .*w23a_t40_|^test result:|^error' solidcraft/ci-reports/w23a-test40/two-bore-tests.log 2>/dev/null || true
+
+      - name: Preserve detailed test evidence even if a case fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-w23a-test40-model-drawing-matrix-fixed-results
+          path: solidcraft/ci-reports/w23a-test40/
+          retention-days: 7
+          if-no-files-found: warn
