@@ -1,0 +1,8 @@
+SolidCraft W23a official-suite candidate verification (E2E-01/E2E-02)
+Requested 2026-10-30. Seven DISTINCT selected native Rust tests, not the previous 128-case matrix.
+Source: Benny1496/solidcraft branch test/w23a-e2e-official-candidates-20261030 pinned commit e1fbc7e1b1eaf683eef467ed7f68c710d949a77b
+Fixture: tests/fixtures/w23a-drawing-updates/oracle84-commands.json, committed. Test module: crates/engine/src/w23a_model_edit_acceptance_tests.rs, wired via lib.rs.
+Runner: Benny1496/ESP32-Victron-SolarSense-Bridge only because SolidCraft fork Actions blocked.
+Workflow: .github/workflows/solidcraft-w23a-official-suite-candidates-native.yml
+Test command: cargo test --locked -p solidcraft-engine --lib w23a_official_ -- --nocapture
+This is initial validation. PASS not claimed before original workflow finishes.
