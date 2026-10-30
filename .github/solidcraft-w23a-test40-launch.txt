@@ -1,1 +1,10 @@
-Launch SolidCraft W23a Test #40 correcting Test39 (Run 41100285262: 23 PASS / 17 FAIL). Root cause *not an upstream SolidCraft defect*: all 17 failures were from our new test harness calling public inspect.measure when the drawing remained OPEN, explicitly rejected by engine ('inspect.measure is not available right now: a drawing is open'). A new w40_assert_volume helper temporarily closes the SAME drawing record, calls real public inspect.measure on the model, then reopens the same drawing ID. Only newly introduced invalid volume checks are redirected; existing 23 PASS tests remain functionally unchanged. Retry all 40 original native Rust tests, including 16 matrix variations, full original Oracle84/85 real Sketch/Extrude/Hole + drawing API, two views, 3 undo/redo model steps, distinct dimensions and same-design record, 90 minute run limit. Keep source pinnned drawings@fefca6bfa0c295408f66c4859bb8204ab0560552, W23a #8288@5dc72344b3da09951b4e7df6f3178d5c950cf0b9. Do not claim pass before CI result. No modifications to upstream or ESP32 firmware.
+SolidCraft W23a Test #40 — 2026-10-30
+Launch corrected Test #39 regression after verifying 23 PASS / 17 FAIL in GitHub Actions Run 41100285262.
+All 40 original native Rust tests preserved, including 16 3D/2D matrix variations and three model undo/redo steps per variation.
+Root-cause fix: public inspect.measure requires drawing.close. The four affected source call sites now invoke assert_analytic_volume_with_drawing, which closes, measures and reopens the same drawing document; volume and identity assertions remain unchanged.
+Workflow: .github/workflows/solidcraft-w23a-shared-design-matrix-test40.yml
+Source: .github/scripts/solidcraft-w23a-t40-model-drawing-matrix.rs
+Pinned upstream: drawings@fefca6bfa0c295408f66c4859bb8204ab0560552.
+Pinned acceptance PR #8288: 5dc72344b3da09951b4e7df6f3178d5c950cf0b9.
+Scope: external GitHub Actions harness only; no ESP32 firmware or official SolidCraft PR modifications.
+Limit: 90 minute job. Do not claim PASS before live CI verification.
