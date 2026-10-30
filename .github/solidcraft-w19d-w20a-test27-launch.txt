@@ -1,0 +1,6 @@
+SolidCraft W19d/W20a targeted test 27
+Triggered: 2026-10-30
+Official drawings pinned SHA: fefca6bfa0c295408f66c4859bb8204ab0560552
+Own PR #8288 pinned SHA: 5dc72344b3da09951b4e7df6f3178d5c950cf0b9
+Purpose: run actual validate.py plus five native W19d/W20a dimension Rust tests.
+E2E full drawing update remains NOT_RUN; no firmware changes.
