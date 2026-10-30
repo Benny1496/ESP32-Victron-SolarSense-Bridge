@@ -1,0 +1,5 @@
+SolidCraft W23a Test #29 focused rerun, 2026-10-30.
+Cause of Test28 nonpass: API parameters.list input capitalized "Radius"; corrected case-insensitive "radius" comparison.
+Actual Test28: E2E-02 early inspect subset PASS; E2E-01 early inspect subset blocked before parameters.change.
+Test29 exercises real diameter change Ø10→Ø12 and lost-reference / Undo on a 100x80x20 two-bore plate using official pinned drawings revision.
+Runtime full U2/R5 and Save/Reopen E2E-04 remain NOT_RUN.
