@@ -1,0 +1,1 @@
+SolidCraft W23a Test31 started 2026-10-30: correct Rust test fixture path via CARGO_MANIFEST_DIR; preflight all official Oracle84 commands with actual SolidCraft CLI and compare baseline volume, then run 3 native Drawing dimension inspect cases (Bore1 diameter, lost reference, undo/redo). No updates to official PR or ESP32 firmware. Full W13/W14 U2 remains NOT_RUN.
