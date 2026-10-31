@@ -1,0 +1,5 @@
+SolidCraft Test50 review final
+PR: https://github.com/tangency-labs/solidcraft/pull/8288
+Exact rebased and rustfmt SHA: c86b7a4c233d4903ded52ac155b1f0ee82abd79c
+Tests: E2E01-04, 27+ dimension, export and view, cargo fmt, static validation
+One Rust engine compilation and 90-minute limit
