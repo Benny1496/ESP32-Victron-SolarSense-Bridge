@@ -1,0 +1,4 @@
+SolidCraft Test #48 – tolerance correction regression, triggered 2026-10-31.
+Exact PR #8288 SHA: 9dfb6a3f8dc37acd5891de4bb4a1d5f027655623
+Original run #47 41204848577: 25 dimension pass, 2 floating-point assertion fail; fix compares |last_good - 10| < 1e-9 mm.
+One compilation, 90 minute job limit, original logs and artifact.
