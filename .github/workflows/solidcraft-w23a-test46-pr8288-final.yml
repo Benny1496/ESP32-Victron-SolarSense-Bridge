@@ -1,0 +1,170 @@
+# Test 46: validate the real PR #8288 HEAD, not a temporary Rust patch.
+name: SolidCraft Test 46 PR8288 final engine integration
+
+on:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-test46-launch.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-test46-pr8288-final
+  cancel-in-progress: false
+
+jobs:
+  pr8288-integration:
+    name: Exact PR HEAD E2E-01+02 and Drawing regression
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout test-runner metadata
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout exact existing PR 8288 commit
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 57a4c170aed6048d4870a65e56f01ea978d6db7d
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install pinned Rust 1.99.1
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Restore engine compilation cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: camwight-w23a-test46-pr8288-head
+
+      - name: Verify exact PR HEAD and original test sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=solidcraft/ci-reports/w23a-test46-pr8288
+          mkdir -p "$out"
+          test "$(git -C solidcraft rev-parse HEAD)" = "57a4c170aed6048d4870a65e56f01ea978d6db7d"
+          test "$(git -C solidcraft rev-parse HEAD:crates/engine/src/cmd/drawing_dimension_tests.rs)" = "84fd718a0d30ceba4f39c4297784dfb5d0a3159a"
+          test "$(git -C solidcraft rev-parse HEAD:examples/acceptance/drawing_m2.json)" = "6d613c668520d93796391379f3647cabd65c3d84"
+          git -C solidcraft rev-parse HEAD | tee "$out/pr-head-sha.txt"
+          git -C harness rev-parse HEAD > "$out/runner-sha.txt"
+          python - <<'PY' | tee "$out/source-preflight.log"
+          import json, pathlib, re
+          root = pathlib.Path("solidcraft")
+          model = json.loads((root / "examples/acceptance/drawing_m2.json").read_text())
+          commands = [x["command"] for x in model["commands"]]
+          assert len(commands) == 27, f"unexpected M2 script: {len(commands)}"
+          assert commands.count("solid.hole") == 2
+          assert commands[-2:] == ["drawing.create", "drawing.view.base"]
+          testfile = (root / "crates/engine/src/cmd/drawing_dimension_tests.rs").read_text()
+          names = re.findall(r"(?m)^fn (w23a_m2_e2e0[12]_[a-z0-9_]+)\(", testfile)
+          assert len(names) == 2 and len(set(names)) == 2, names
+          assert testfile.count('include_str!("../../../../examples/acceptance/drawing_m2.json")') >= 2
+          assert testfile.count("s.run_script(&script)") >= 2
+          assert "parameters.change" in testfile and "timeline.delete" in testfile
+          assert "drawing.dimension.inspect" in testfile and "drawing.dimension.add" in testfile
+          cases = json.loads((root / "tests/fixtures/w23a-drawing-updates/cases.json").read_text())
+          assert len(cases["cases"]) == 4
+          assert all(c["runtime_status"] == "NOT_RUN" for c in cases["cases"])
+          print("TEST46_PR_HEAD_AND_CAMWIGHT_CONTRACT_VERIFIED")
+          for name in names:
+              print("OFFICIAL_TEST", name)
+          print("FULL_UI_PAPER_E2E_NOT_RUN")
+          PY
+          echo "Exact PR commit, no test source patch or production changes in runner" > "$out/scope.txt"
+          echo "W23-1 (#9821) and its #9254 stack are dependencies in this draft PR; reconcile before merge." >> "$out/scope.txt"
+          echo "Four complete U2/UI/paper scenarios remain NOT RUN." >> "$out/scope.txt"
+
+      - name: Validate four original oracle recipes statically
+        shell: bash
+        working-directory: solidcraft
+        run: |
+          set -euo pipefail
+          python tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee ci-reports/w23a-test46-pr8288/oracle-static-validation.log
+          grep -q 'STATIC CONTRACT PASS' ci-reports/w23a-test46-pr8288/oracle-static-validation.log
+
+      - name: Compile native SolidCraft engine tests once
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/w23a-test46-pr8288/build.log
+
+      - name: Execute CamWight E2E01 and E2E02 on exact PR HEAD
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib w23a_m2_e2e0 -- --nocapture 2>&1 | tee ci-reports/w23a-test46-pr8288/e2e01-02.log
+          grep -Eq 'test result: ok\. 2 passed; 0 failed;' ci-reports/w23a-test46-pr8288/e2e01-02.log
+          echo "PR8288_E2E01_02_PASS=2 FAIL=0" | tee ci-reports/w23a-test46-pr8288/focused-result.txt
+
+      - name: Execute complete Drawing dimension test module
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_dimension::tests -- --nocapture 2>&1 | tee ci-reports/w23a-test46-pr8288/dimension-regression.log
+          grep -Eq 'test result: ok\. [1-9][0-9]* passed; 0 failed;' ci-reports/w23a-test46-pr8288/dimension-regression.log
+
+      - name: Execute Drawing export regression including W23-1 milestone
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_export::tests -- --nocapture 2>&1 | tee ci-reports/w23a-test46-pr8288/export-regression.log
+          grep -q 'the_milestone_plate_exports_the_same_after_it_is_saved_and_opened ... ok' ci-reports/w23a-test46-pr8288/export-regression.log
+          grep -Eq 'test result: ok\. [1-9][0-9]* passed; 0 failed;' ci-reports/w23a-test46-pr8288/export-regression.log
+
+      - name: Execute Drawing view regression
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_view::tests -- --nocapture 2>&1 | tee ci-reports/w23a-test46-pr8288/view-regression.log
+          grep -Eq 'test result: ok\. [1-9][0-9]* passed; 0 failed;' ci-reports/w23a-test46-pr8288/view-regression.log
+
+      - name: Summarize exact-source tests
+        if: always()
+        shell: bash
+        run: |
+          echo "PR8288_TEST46_COMMIT=57a4c170aed6048d4870a65e56f01ea978d6db7d"
+          cat solidcraft/ci-reports/w23a-test46-pr8288/focused-result.txt 2>/dev/null || true
+          for f in e2e01-02 dimension-regression export-regression view-regression; do
+            echo "=== $f ==="
+            grep -E 'test result:|w23a_m2_e2e0|the_milestone_plate_exports|^error' "solidcraft/ci-reports/w23a-test46-pr8288/$f.log" 2>/dev/null || true
+          done
+          cat solidcraft/ci-reports/w23a-test46-pr8288/oracle-static-validation.log 2>/dev/null || true
+
+      - name: Archive original source and test evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-test46-pr8288-final-integration
+          path: solidcraft/ci-reports/w23a-test46-pr8288/
+          retention-days: 14
+          if-no-files-found: warn
