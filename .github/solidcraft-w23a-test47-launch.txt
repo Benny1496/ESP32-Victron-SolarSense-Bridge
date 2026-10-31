@@ -1,0 +1,3 @@
+Test 47 launched 2026-10-31
+PR #8288 exact merged revision: 54646129c749137a6223a0ab6881da0049331540
+5 acceptance engine tests, 1 Rust build, limit 90 min; M2 regression, view and export.
