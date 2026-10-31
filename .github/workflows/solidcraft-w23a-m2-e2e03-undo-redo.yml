@@ -1,0 +1,143 @@
+# W23a E2E-01/02 tests in CamWight's requested existing Rust test module,
+# using his single real W23-1 drawing_m2.json script (draft PR #9821).
+name: SolidCraft W23a shared M2 E2E-03 undo-redo
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-e2e03-launch.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-camwight-w23a-m2-e2e03
+  cancel-in-progress: false
+
+jobs:
+  w23a-m2-official-shape:
+    name: Two independent model-edit E2E03 undo-redo tests using M2 original script
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout runner metadata
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout exact W23-1 stacked source containing drawing_m2.json
+        uses: actions/checkout@v4
+        with:
+          repository: tangency-labs/solidcraft
+          ref: 0753096c5856b31f8ec38a4c96ab00e8e4c110f4
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Checkout two E2E03 Rust test additions from SolidCraft fork
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 02571ef210d4b30319f0eb2eab0c5a594e962078
+          path: candidate
+          persist-credentials: false
+
+      - name: Install pinned Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Restore engine compile cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: camwight-w23a-m2-e2e03
+
+      - name: Verify source commits and stage two tests in existing canonical file
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=solidcraft/ci-reports/w23a-m2-e2e03
+          mkdir -p "$out"
+          test "$(git -C solidcraft rev-parse HEAD)" = "0753096c5856b31f8ec38a4c96ab00e8e4c110f4"
+          test "$(git -C candidate rev-parse HEAD)" = "02571ef210d4b30319f0eb2eab0c5a594e962078"
+          git -C solidcraft rev-parse HEAD > "$out/official-source-sha.txt"
+          git -C candidate rev-parse HEAD > "$out/candidate-source-sha.txt"
+          git -C harness rev-parse HEAD > "$out/runner-sha.txt"
+          python - <<'PY' | tee "$out/preflight.txt"
+          import json, pathlib, re
+          root=pathlib.Path("solidcraft")
+          script=json.loads((root/"examples/acceptance/drawing_m2.json").read_text())
+          a=[c["command"] for c in script["commands"]]
+          assert len(a)==27 and a[-2:]==["drawing.create","drawing.view.base"]
+          assert a.count("solid.hole")==2
+          patch=pathlib.Path("candidate/tests/fixtures/w23a-drawing-updates/camwight-m2-e2e03-undo-redo.rsinc").read_text()
+          names=re.findall(r"(?m)^fn (w23a_m2_e2e03_[0-9]+_[a-z0-9_]+)\(",patch)
+          assert len(names)==2 and len(set(names))==2,names
+          assert patch.count("Session::run_script")>=1 or patch.count("s.run_script")>=2
+          assert 'include_str!("../../../../examples/acceptance/drawing_m2.json")' in patch
+          dest=(root/"crates/engine/src/cmd/drawing_dimension_tests.rs").read_text()
+          assert "fn round_index(" in dest
+          assert "fn reads(" in dest
+          assert "w23a_m2_e2e03_" not in dest
+          assert "drawing_m2.json" not in dest, "do not duplicate W23-1's acceptance model"
+          print("W23A_M2_E2E03_2_TESTS_READY")
+          for name in names: print("TARGET_TEST", name)
+          PY
+          printf '\n' >> solidcraft/crates/engine/src/cmd/drawing_dimension_tests.rs
+          cat candidate/tests/fixtures/w23a-drawing-updates/camwight-m2-e2e03-undo-redo.rsinc >> solidcraft/crates/engine/src/cmd/drawing_dimension_tests.rs
+          echo "Staged ONLY into EXISTING Rust test file; no upstream production changes" | tee "$out/scope.txt"
+          echo "This is external ESP32 runner; E2E03 exploratory tests are fork-only, not submitted upstream." | tee -a "$out/scope.txt"
+          echo "The full W23a four GUI E2E recipes remain NOT_RUN; E2E-03 engine subset only." | tee -a "$out/scope.txt"
+
+      - name: Compile native SolidCraft engine tests once
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/w23a-m2-e2e03/build.log
+
+      - name: Execute E2E03 update undo redo and deletion undo redo
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib w23a_m2_e2e03_ -- --nocapture 2>&1 | tee ci-reports/w23a-m2-e2e03/e2e01-02-tests.log
+          grep -Eq 'test result: ok\. 2 passed; 0 failed;' ci-reports/w23a-m2-e2e03/e2e01-02-tests.log
+          echo "W23A_M2_E2E03_PASS=2 FAIL=0" | tee ci-reports/w23a-m2-e2e03/summary.txt
+
+      - name: Recheck W23-1 milestone script acceptance regression
+        shell: bash
+        working-directory: solidcraft
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib the_milestone_plate_exports_the_same_after_it_is_saved_and_opened -- --nocapture 2>&1 | tee ci-reports/w23a-m2-e2e03/milestone-regression.log
+          grep -Eq 'test result: ok\. 1 passed; 0 failed;' ci-reports/w23a-m2-e2e03/milestone-regression.log
+
+      - name: Summarize original engine tests
+        if: always()
+        shell: bash
+        run: |
+          grep -E 'w23a_m2_e2e03_|test result:|^error' solidcraft/ci-reports/w23a-m2-e2e03/e2e01-02-tests.log 2>/dev/null || true
+          grep 'test result:' solidcraft/ci-reports/w23a-m2-e2e03/milestone-regression.log 2>/dev/null || true
+          cat solidcraft/ci-reports/w23a-m2-e2e03/summary.txt 2>/dev/null || true
+
+      - name: Preserve build and test logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-camwight-m2-e2e03-undo-redo-results
+          path: solidcraft/ci-reports/w23a-m2-e2e03/
+          retention-days: 7
+          if-no-files-found: warn
