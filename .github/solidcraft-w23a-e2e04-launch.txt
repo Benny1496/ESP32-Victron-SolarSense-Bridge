@@ -1,0 +1,9 @@
+W23a E2E04 first real file save/reopen tests – 2026-10-31
+Latest official drawings source: tangency-labs/solidcraft@693cf911f12cd9e419456df6f253f6113696f298 (includes merged W19d PR #9764).
+Source-of-truth: Benny1496/solidcraft test/w23a-save-reopen-e2e04-20261031 at fdd1d32e342dfca1793fbf8ce3c8928214d42b1c.
+9 native tests (7 proven from prior source, plus 2 NEW real native design-file / JSON save-reopen W23a dimension reference cases).
+Workflow: .github/workflows/solidcraft-w23a-e2e04-save-reopen-9-native.yml.
+Runner: Benny1496/ESP32-Victron-SolarSense-Bridge GitHub Actions (fork Actions disabled).
+Official Draft PR #8288 stays UNCHANGED. Not a full U2 / paper annotation acceptance run.
+Workflow maximum 90 min; test group target under 75 min. No artificial pauses.
+PASS/FAIL is pending original GitHub workflow log.
