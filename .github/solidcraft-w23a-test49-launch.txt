@@ -1,0 +1,4 @@
+Test #49 - fix stale CI assertion after last_good floating-point tolerance was added.
+PR #8288 commit 9dfb6a3f8dc37acd5891de4bb4a1d5f027655623
+Run #48 (41209407087) failed in Python preflight, not Rust; this run validates existing correct 3 tolerance assertions before executing all official E2E and dimension/export/view suites.
+One Rust compilation; 90 minute limit; original log and artifacts.
