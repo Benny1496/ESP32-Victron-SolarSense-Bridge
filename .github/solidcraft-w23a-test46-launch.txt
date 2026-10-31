@@ -1,0 +1,6 @@
+SolidCraft Test #46 – final PR #8288 exact-HEAD integration
+PR: tangency-labs/solidcraft#8288
+Locked PR head: 57a4c170aed6048d4870a65e56f01ea978d6db7d
+Targets: E2E-01/02, dimension module, drawing export and view regression; static oracle recipe validation.
+Run limit: 90 minutes. Original GitHub logs and artifacts retained.
+Date: 2026-10-31
