@@ -52,7 +52,7 @@ jobs:
           mkdir -p solidcraft/ci-reports/test47-w23a
           out=solidcraft/ci-reports/test47-w23a
           test "$(git -C solidcraft rev-parse HEAD)" = "54646129c749137a6223a0ab6881da0049331540"
-          git -C solidcraft merge-base --is-ancestor 9b73ec8d9df26964c1d245e8cf0eb1bab6a0efe3 HEAD
+          git -C solidcraft cat-file -p HEAD | grep -Fq 'parent 9b73ec8d9df26964c1d245e8cf0eb1bab6a0efe3'  # verify the merge parent without fetching history
           test "$(git -C solidcraft rev-parse HEAD:crates/engine/src/cmd/drawing_dimension_tests.rs)" = "4121d15071e671d056924e0b08fc230a15e0e538"
           test "$(git -C solidcraft rev-parse HEAD:examples/acceptance/drawing_m2.json)" = "6d613c668520d93796391379f3647cabd65c3d84"
           git -C solidcraft rev-parse HEAD > "$out/verified-source.txt"
