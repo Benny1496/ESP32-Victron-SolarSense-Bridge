@@ -1,0 +1,4 @@
+Test51 corrected toolchain: rustfmt component installed with pinned Rust 1.99.1
+PR8288 exact head c86b7a4c233d4903ded52ac155b1f0ee82abd79c
+Replaces failed run 41214366467 (rustfmt component missing; source code unchanged).
+90 minutes max, single cargo build, 5 E2E rust tests and related engine checks.
