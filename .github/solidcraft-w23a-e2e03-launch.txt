@@ -2,3 +2,5 @@ W23a Test45: CamWight shared W23-1 M2 script E2E-03 model edit/delete undo-redo 
 Upstream W23-1 source tangency-labs/solidcraft@0753096c5856b31f8ec38a4c96ab00e8e4c110f4.
 Fork staging source Benny1496/solidcraft@test/w23a-camwight-m2-e2e01-02-20261031@02571ef210d4b30319f0eb2eab0c5a594e962078.
 Workflow .github/workflows/solidcraft-w23a-m2-e2e03-undo-redo.yml. 2 new E2E03 command/engine tests + W23-1 baseline regression; one native compile, max 90m. Fork-only test. Official PR8288 unchanged. GitHub Actions remains ESP32 technical runner. PASS pending original log.
+
+Preflight fix re-trigger: matcher now accepts named w23a_m2_e2e03_* test cases (workflow ba5edb3af4c3dff5f2cc5393fdd44435789d3b89). Original first queued run superseded by this re-run.
