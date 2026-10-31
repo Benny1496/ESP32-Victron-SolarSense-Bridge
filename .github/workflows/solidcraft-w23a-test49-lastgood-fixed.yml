@@ -1,0 +1,163 @@
+# Test 49: review fixes E2E-01/04 at actual PR head, with numeric tolerance.
+name: SolidCraft Test 49 CamWight all four engine acceptance cases
+
+on:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-test49-launch.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-test49-four-e2e
+  cancel-in-progress: false
+
+jobs:
+  w23a-four-engine-cases:
+    name: Verify merged PR8288 head and five official native tests
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout runner metadata
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout exact official PR 8288 revision
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: 9dfb6a3f8dc37acd5891de4bb4a1d5f027655623
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install pinned Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+
+      - name: Restore compile cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-pr8288-test49-four-acceptance
+
+      - name: Verify exact merged source and all five acceptance tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p solidcraft/ci-reports/test49-w23a
+          out=solidcraft/ci-reports/test49-w23a
+          test "$(git -C solidcraft rev-parse HEAD)" = "9dfb6a3f8dc37acd5891de4bb4a1d5f027655623"
+          git -C solidcraft cat-file -p HEAD | grep -Fq 'parent 54646129c749137a6223a0ab6881da0049331540'  # verify the merge parent without fetching history
+          test "$(git -C solidcraft rev-parse HEAD:crates/engine/src/cmd/drawing_dimension_tests.rs)" = "4f80c02c97065a04f7aa9ce2ec93ca2bf0b891ed"
+          test "$(git -C solidcraft rev-parse HEAD:examples/acceptance/drawing_m2.json)" = "6d613c668520d93796391379f3647cabd65c3d84"
+          git -C solidcraft rev-parse HEAD > "$out/verified-source.txt"
+          git -C harness rev-parse HEAD > "$out/runner-source.txt"
+          python - <<'PY' | tee "$out/preflight.log"
+          import pathlib, re, json
+          root=pathlib.Path("solidcraft")
+          tests=(root/"crates/engine/src/cmd/drawing_dimension_tests.rs").read_text()
+          expected=[
+              "changing_a_bores_diameter_keeps_its_dimension",
+              "deleting_a_bore_loses_its_dimension_and_never_moves_it",
+              "undo_and_redo_a_diameter_change_keep_its_dimension",
+              "undo_and_redo_a_deleted_bore_restore_its_dimension",
+              "reopening_a_plate_keeps_dimensions_and_a_lost_bores_last_value"
+          ]
+          names=re.findall(r"(?m)^fn ([a-z0-9_]+)\(",tests)
+          assert all(n in names for n in expected),[n for n in expected if n not in names]
+          expected_checks=[
+              'assert!(lost["last_good"].as_f64().is_some_and(|value| (value - 10.0).abs() < 1e-9)',
+              'assert!(a["last_good"].as_f64().is_some_and(|value| (value - 10.0).abs() < 1e-9)',
+          ]
+          for check in expected_checks:
+              assert check in tests, f"Missing numeric tolerance assertion: {check}"
+          assert tests.count('(value - 10.0).abs() < 1e-9') == 3, "All three last_good checks need tolerance"
+          assert 'assert_eq!(lost["last_good"], json!(10.0)' not in tests
+          assert tests.count("s.run_script(&script)")>=5
+          script=json.loads((root/"examples/acceptance/drawing_m2.json").read_text())
+          assert len(script["commands"])==27 and [c["command"] for c in script["commands"][-2:]]==["drawing.create","drawing.view.base"]
+          print("TEST49_FIVE_TESTS_AND_DRAWINGS_MERGE_VERIFIED")
+          for name in expected: print("EXPECTED",name)
+          print("FULL_U2_UI_E2E_NOT_RUN")
+          PY
+
+      - name: Static four-case Oracle contract validation
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee ci-reports/test49-w23a/static-oracles.log
+          grep -q 'STATIC CONTRACT PASS' ci-reports/test49-w23a/static-oracles.log
+
+      - name: Compile SolidCraft engine tests only once
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/test49-w23a/build.log
+
+      - name: Run all Drawing dimension tests including five E2E acceptance functions
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_dimension::tests -- --nocapture 2>&1 | tee ci-reports/test49-w23a/dimension.log
+          for name in changing_a_bores_diameter_keeps_its_dimension deleting_a_bore_loses_its_dimension_and_never_moves_it undo_and_redo_a_diameter_change_keep_its_dimension undo_and_redo_a_deleted_bore_restore_its_dimension reopening_a_plate_keeps_dimensions_and_a_lost_bores_last_value; do
+            grep -Fq "::${name} ... ok" ci-reports/test49-w23a/dimension.log
+          done
+          grep -Eq 'test result: ok\. [1-9][0-9]* passed; 0 failed;' ci-reports/test49-w23a/dimension.log
+          echo 'W23A_E2E01_E2E02_E2E03_E2E04_ENGINE_CASES_PASS=5 FAIL=0' | tee ci-reports/test49-w23a/summary.txt
+
+      - name: Recheck Drawing export and M2 milestone
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_export::tests -- --nocapture 2>&1 | tee ci-reports/test49-w23a/export.log
+          grep -Fq 'the_milestone_plate_exports_the_same_after_it_is_saved_and_opened ... ok' ci-reports/test49-w23a/export.log
+
+      - name: Recheck Drawing view regressions
+        working-directory: solidcraft
+        shell: bash
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_view::tests -- --nocapture 2>&1 | tee ci-reports/test49-w23a/view.log
+          grep -Eq 'test result: ok\. [1-9][0-9]* passed; 0 failed;' ci-reports/test49-w23a/view.log
+
+      - name: Summarize original GitHub test evidence
+        if: always()
+        shell: bash
+        run: |
+          echo "TEST49_ACTUAL_PR_HEAD=9dfb6a3f8dc37acd5891de4bb4a1d5f027655623"
+          for f in dimension export view; do
+            echo "--- $f ---"
+            grep -E 'test result:|reopening_a_plate_keeps_dimensions|undo_and_redo_a_|changing_a_bores_|deleting_a_bore_' "solidcraft/ci-reports/test49-w23a/$f.log" 2>/dev/null || true
+          done
+          cat solidcraft/ci-reports/test49-w23a/summary.txt 2>/dev/null || true
+
+      - name: Archive full build and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-test49-four-official-e2e-cases
+          path: solidcraft/ci-reports/test49-w23a/
+          retention-days: 14
+          if-no-files-found: warn
