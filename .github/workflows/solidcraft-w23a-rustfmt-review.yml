@@ -1,0 +1,38 @@
+name: SolidCraft W23a PR8288 Rust formatter
+on:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-format-trigger.txt'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: a64057c7d9692d979265a8e330ecbd076d1b8c7c
+          path: solidcraft
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+          components: rustfmt
+      - name: Format current Rust source and export exact formatted bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd solidcraft
+          test "$(git rev-parse HEAD)" = "a64057c7d9692d979265a8e330ecbd076d1b8c7c"
+          cargo fmt --all
+          git diff --check
+          echo "FORMAT_STATUS_BEGIN"
+          git diff --numstat -- crates/engine/src/cmd/drawing_dimension_tests.rs
+          echo "FORMAT_STATUS_END"
+          echo "FORMATTED_W23A_TEST_FILE_BEGIN"
+          base64 -w0 crates/engine/src/cmd/drawing_dimension_tests.rs
+          echo
+          echo "FORMATTED_W23A_TEST_FILE_END"
