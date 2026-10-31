@@ -1,0 +1,7 @@
+SolidCraft W23a E2E-01/E2E-02 official-integration native validation, 2026-10-31.
+CamWight explicitly invited Benny1496 to contribute E2E01/02 in existing PR #8288, requested shared W23-1 drawing_m2.json in #9821 and existing crates/engine/src/cmd/drawing_dimension_tests.rs.
+W23-1 upstream stacked source: tangency-labs/solidcraft@0753096c5856b31f8ec38a4c96ab00e8e4c110f4.
+Staged OWN TEST SOURCE: Benny1496/solidcraft@test/w23a-camwight-m2-e2e01-02-20261031 commit 839d6258911dcb09c143adb3a4ab12d924b6a182; file tests/fixtures/w23a-drawing-updates/camwight-m2-acceptance-patch.rsinc; temporary runner appends only tests into the EXISTING official drawing_dimension_tests.rs file in disposable CI checkout.
+Test groups: two new W23a E2E01/02 cases plus one existing W23-1 milestone acceptance smoke. Pinned compiler rustc 1.99.1. One compilation, <=90 min job limit.
+No production code change, official PR #8288 not modified until the adapted tests are validated.
+Github org GitHub App is not authorized to post comments (403); reply prepared for manual user submission.
