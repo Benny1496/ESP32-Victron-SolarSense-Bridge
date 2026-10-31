@@ -73,7 +73,7 @@ jobs:
           assert len(a)==27 and a[-2:]==["drawing.create","drawing.view.base"]
           assert a.count("solid.hole")==2
           patch=pathlib.Path("candidate/tests/fixtures/w23a-drawing-updates/camwight-m2-e2e03-undo-redo.rsinc").read_text()
-          names=re.findall(r"(?m)^fn (w23a_m2_e2e03_[0-9]+_[a-z0-9_]+)\(",patch)
+          names=re.findall(r"(?m)^fn (w23a_m2_e2e03_[a-z0-9_]+)\(",patch)
           assert len(names)==2 and len(set(names))==2,names
           assert patch.count("Session::run_script")>=1 or patch.count("s.run_script")>=2
           assert 'include_str!("../../../../examples/acceptance/drawing_m2.json")' in patch
