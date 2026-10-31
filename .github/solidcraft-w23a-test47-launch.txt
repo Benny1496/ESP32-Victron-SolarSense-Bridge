@@ -1,3 +1,4 @@
 Test 47 launched 2026-10-31
 PR #8288 exact merged revision: 54646129c749137a6223a0ab6881da0049331540
 5 acceptance engine tests, 1 Rust build, limit 90 min; M2 regression, view and export.
+Retry run after shallow-clone parent check correction. First run 41204556934 failed before Rust compilation, commit d5eb9b0edff91019f11c7f9849d0c7fd8d7d3e29.
