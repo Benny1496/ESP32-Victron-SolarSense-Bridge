@@ -1,0 +1,1 @@
+Test 52 Linux, PR #8288 pinned at c86b7a4c233d4903ded52ac155b1f0ee82abd79c. Trigger Ubuntu 24.04 native drawing dimension/export/view tests only. Do not modify SolidCraft source or PR.
