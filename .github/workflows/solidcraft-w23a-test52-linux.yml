@@ -1,0 +1,113 @@
+# Linux counterpart to Windows Test #51. Pin the exact reviewed SolidCraft PR commit.
+# Runs ONLY in this ESP32 runner repository; never writes SolidCraft source or firmware.
+name: SolidCraft Test 52 Linux PR8288 native acceptance
+on:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-test52-launch.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-test52-linux
+  cancel-in-progress: false
+
+jobs:
+  linux-pr8288:
+    name: Ubuntu 24.04 pinned PR8288 - 71 native tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+      RUST_BACKTRACE: '1'
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - name: Checkout exact SolidCraft PR revision, read-only
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: c86b7a4c233d4903ded52ac155b1f0ee82abd79c
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install pinned Rust with rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+          components: rustfmt
+
+      - name: Restore Linux Rust compilation cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-pr8288-linux-test52-test53
+
+      - name: Verify commit, test content and Linux platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p solidcraft/ci-reports/test52-linux
+          out=solidcraft/ci-reports/test52-linux
+          echo "RUNNER_OS=$RUNNER_OS" | tee "$out/platform.txt"
+          uname -a | tee -a "$out/platform.txt"
+          lsb_release -a 2>&1 | tee -a "$out/platform.txt" || true
+          rustc --version | tee -a "$out/platform.txt"
+          cargo --version | tee -a "$out/platform.txt"
+          git -C solidcraft rev-parse HEAD | tee "$out/source-sha.txt"
+          test "$(git -C solidcraft rev-parse HEAD)" = "c86b7a4c233d4903ded52ac155b1f0ee82abd79c"
+          test "$(git -C solidcraft rev-parse HEAD:crates/engine/src/cmd/drawing_dimension_tests.rs)" = "5615d7647c4ea4808af79e8c45c3a6c7c9237dec"
+          test "$(git -C solidcraft rev-parse HEAD:examples/acceptance/drawing_m2.json)" = "6d613c668520d93796391379f3647cabd65c3d84"
+          test "$RUNNER_OS" = Linux
+          echo TEST52_PINNED_LINUX_SOURCE_PASS | tee "$out/preflight.log"
+
+      - name: Check four-case recipes and formatting
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee ci-reports/test52-linux/oracle.log
+          grep -Fq 'STATIC CONTRACT PASS' ci-reports/test52-linux/oracle.log
+          cargo fmt --all -- --check 2>&1 | tee ci-reports/test52-linux/rustfmt.log
+
+      - name: Build ONCE and execute all three Linux groups within 75 minutes
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM 75m bash -eo pipefail -c '
+            cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/test52-linux/build.log
+            cargo test --locked -p solidcraft-engine --lib cmd::drawing_dimension::tests -- --nocapture 2>&1 | tee ci-reports/test52-linux/dimension.log
+            cargo test --locked -p solidcraft-engine --lib cmd::drawing_export::tests -- --nocapture 2>&1 | tee ci-reports/test52-linux/export.log
+            cargo test --locked -p solidcraft-engine --lib cmd::drawing_view::tests -- --nocapture 2>&1 | tee ci-reports/test52-linux/view.log
+          '
+          for name in changing_a_bores_diameter_keeps_its_dimension deleting_a_bore_loses_its_dimension_and_never_moves_it undo_and_redo_a_diameter_change_keep_its_dimension undo_and_redo_a_deleted_bore_restore_its_dimension reopening_a_plate_keeps_dimensions_and_a_lost_bores_last_value; do
+            grep -Fq "::${name} ... ok" ci-reports/test52-linux/dimension.log
+          done
+          grep -Fq 'test result: ok. 27 passed; 0 failed;' ci-reports/test52-linux/dimension.log
+          grep -Fq 'test result: ok. 5 passed; 0 failed;' ci-reports/test52-linux/export.log
+          grep -Fq 'test result: ok. 39 passed; 0 failed;' ci-reports/test52-linux/view.log
+          echo TEST52_UBUNTU_PR8288_NATIVE_DISTINCT_PASS=71 FAIL=0 | tee ci-reports/test52-linux/summary.txt
+          echo FULL_U2_UI_E2E_NOT_RUN | tee -a ci-reports/test52-linux/summary.txt
+
+      - name: Print test results
+        if: always()
+        shell: bash
+        run: |
+          echo "TEST52_SOURCE=c86b7a4c233d4903ded52ac155b1f0ee82abd79c"
+          for f in solidcraft/ci-reports/test52-linux/{dimension,export,view}.log; do
+            echo "--- $f"
+            grep 'test result:' "$f" 2>/dev/null || true
+          done
+          cat solidcraft/ci-reports/test52-linux/summary.txt 2>/dev/null || true
+
+      - name: Preserve original runner evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-test52-linux-pr8288
+          path: solidcraft/ci-reports/test52-linux/
+          retention-days: 14
+          if-no-files-found: warn
