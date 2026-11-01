@@ -1,0 +1,185 @@
+# Additional targeted multi-edit acceptance tests. Runner-only tests are NOT PR source changes.
+name: SolidCraft Test 53 repeated model edits PR8288
+on:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-test53-launch.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-w23a-test53-multiedit
+  cancel-in-progress: false
+
+jobs:
+  multi-edit:
+    name: Windows pinned PR8288 plus 2 isolated multi-edit Rust tests
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+      RUST_BACKTRACE: '1'
+    steps:
+      - name: Checkout reviewed SolidCraft commit only
+        uses: actions/checkout@v4
+        with:
+          repository: Benny1496/solidcraft
+          ref: c86b7a4c233d4903ded52ac155b1f0ee82abd79c
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install tested Rust compiler and rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+          components: rustfmt
+
+      - name: Reuse cached Windows Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-pr8288-test51-four-acceptance
+
+      - name: Verify unchanged official PR source and original static oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p solidcraft/ci-reports/test53-multiedit
+          out=solidcraft/ci-reports/test53-multiedit
+          git -C solidcraft rev-parse HEAD | tee "$out/pinned-original-commit.txt"
+          test "$(git -C solidcraft rev-parse HEAD)" = "c86b7a4c233d4903ded52ac155b1f0ee82abd79c"
+          test "$(git -C solidcraft rev-parse HEAD:crates/engine/src/cmd/drawing_dimension_tests.rs)" = "5615d7647c4ea4808af79e8c45c3a6c7c9237dec"
+          test -z "$(git -C solidcraft status --porcelain)"
+          rustc --version | tee "$out/platform.txt"
+          python3 solidcraft/tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee "$out/oracle.log"
+          grep -Fq 'STATIC CONTRACT PASS' "$out/oracle.log"
+          echo BASE_PR_SOURCE_VERIFIED_UNCHANGED_BEFORE_RUNNER_ONLY_TESTS | tee "$out/preflight.txt"
+
+      - name: Add TWO runner-only tests to copied Rust test module
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >> solidcraft/crates/engine/src/cmd/drawing_dimension_tests.rs <<'RS'
+
+          /// Runner-only Test53: three sequential diameter changes retain both dimensions and authored labels.
+          #[test]
+          fn w23a_t53_three_resizes_keep_both_dimensions_and_survive_reopen() {
+              let (mut s, drawing, first, second) = workshop_plate_dimensions();
+              let authored = s.drawing("test").unwrap().to_json().unwrap();
+              for (size, expected, label) in [
+                  ("12 mm", 12.0, "Ø12.00"),
+                  ("8 mm", 8.0, "Ø8.00"),
+                  ("10 mm", 10.0, "Ø10.00"),
+              ] {
+                  run(&mut s, "drawing.close", json!({}));
+                  run(&mut s, "parameters.change", json!({"name": "bore1_d", "expression": size}));
+                  run(&mut s, "drawing.open", json!({"drawing": ids::encode(drawing)}));
+                  let a = run(&mut s, "drawing.dimension.inspect", json!({"dimension": first["dimension"]}));
+                  let b = run(&mut s, "drawing.dimension.inspect", json!({"dimension": second["dimension"]}));
+                  assert_eq!(a["record"]["kind"], first["record"]["kind"], "Bore1 reattached after {size}");
+                  assert_eq!(b["record"]["kind"], second["record"]["kind"], "Bore2 reattached after {size}");
+                  reads(&a, expected, label);
+                  reads(&b, 10.0, "Ø10.00");
+                  assert_eq!(s.drawing("test").unwrap().to_json().unwrap(), authored, "drawing/label layout changed after {size}");
+              }
+              let mut saved = reopened(&mut s, drawing, "w23a-t53-three-resizes.solidcraft");
+              let a = run(&mut saved, "drawing.dimension.inspect", json!({"dimension": first["dimension"]}));
+              let b = run(&mut saved, "drawing.dimension.inspect", json!({"dimension": second["dimension"]}));
+              assert_eq!(a["record"]["kind"], first["record"]["kind"]);
+              assert_eq!(b["record"]["kind"], second["record"]["kind"]);
+              assert_eq!(a["record"]["text"], first["record"]["text"]);
+              assert_eq!(b["record"]["text"], second["record"]["text"]);
+              reads(&a, 10.0, "Ø10.00");
+              reads(&b, 10.0, "Ø10.00");
+          }
+
+          /// Runner-only Test53: editing both bores, undo/redo of the second edit, and file persistence.
+          #[test]
+          fn w23a_t53_two_independent_resizes_undo_redo_and_reopen() {
+              let (mut s, drawing, first, second) = workshop_plate_dimensions();
+              let authored = s.drawing("test").unwrap().to_json().unwrap();
+              run(&mut s, "drawing.close", json!({}));
+              run(&mut s, "parameters.change", json!({"name": "bore1_d", "expression": "12 mm"}));
+              run(&mut s, "parameters.change", json!({"name": "bore2_d", "expression": "8 mm"}));
+              run(&mut s, "drawing.open", json!({"drawing": ids::encode(drawing)}));
+              let a = run(&mut s, "drawing.dimension.inspect", json!({"dimension": first["dimension"]}));
+              let b = run(&mut s, "drawing.dimension.inspect", json!({"dimension": second["dimension"]}));
+              assert_eq!(a["record"]["kind"], first["record"]["kind"]);
+              assert_eq!(b["record"]["kind"], second["record"]["kind"]);
+              reads(&a, 12.0, "Ø12.00");
+              reads(&b, 8.0, "Ø8.00");
+              run(&mut s, "drawing.close", json!({}));
+              run(&mut s, "edit.undo", json!({}));
+              run(&mut s, "drawing.open", json!({"drawing": ids::encode(drawing)}));
+              reads(&run(&mut s, "drawing.dimension.inspect", json!({"dimension": first["dimension"]})), 12.0, "Ø12.00");
+              reads(&run(&mut s, "drawing.dimension.inspect", json!({"dimension": second["dimension"]})), 10.0, "Ø10.00");
+              assert_eq!(s.drawing("test").unwrap().to_json().unwrap(), authored);
+              run(&mut s, "drawing.close", json!({}));
+              run(&mut s, "edit.redo", json!({}));
+              run(&mut s, "drawing.open", json!({"drawing": ids::encode(drawing)}));
+              let a = run(&mut s, "drawing.dimension.inspect", json!({"dimension": first["dimension"]}));
+              let b = run(&mut s, "drawing.dimension.inspect", json!({"dimension": second["dimension"]}));
+              assert_eq!(a["record"]["kind"], first["record"]["kind"]);
+              assert_eq!(b["record"]["kind"], second["record"]["kind"]);
+              reads(&a, 12.0, "Ø12.00");
+              reads(&b, 8.0, "Ø8.00");
+              assert_eq!(s.drawing("test").unwrap().to_json().unwrap(), authored);
+              let mut saved = reopened(&mut s, drawing, "w23a-t53-two-independent.solidcraft");
+              let a = run(&mut saved, "drawing.dimension.inspect", json!({"dimension": first["dimension"]}));
+              let b = run(&mut saved, "drawing.dimension.inspect", json!({"dimension": second["dimension"]}));
+              assert_eq!(a["record"]["kind"], first["record"]["kind"]);
+              assert_eq!(b["record"]["kind"], second["record"]["kind"]);
+              assert_eq!(a["record"]["text"], first["record"]["text"]);
+              assert_eq!(b["record"]["text"], second["record"]["text"]);
+              reads(&a, 12.0, "Ø12.00");
+              reads(&b, 8.0, "Ø8.00");
+          }
+          RS
+          cd solidcraft
+          cargo fmt --all
+          test "$(grep -c '^fn w23a_t53_' crates/engine/src/cmd/drawing_dimension_tests.rs)" = 2
+          git diff --stat | tee ci-reports/test53-multiedit/runner-only-test-diffstat.txt
+          git diff -- crates/engine/src/cmd/drawing_dimension_tests.rs > ci-reports/test53-multiedit/runner-only-extra-test.patch
+          echo TEST53_RUNNER_ONLY_PATCH_NOT_IN_PR | tee ci-reports/test53-multiedit/runner-only.txt
+
+      - name: Compile once and execute original 71 plus 2 new Rust tests
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/test53-multiedit/build.log
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_dimension::tests -- --nocapture 2>&1 | tee ci-reports/test53-multiedit/dimension.log
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_export::tests -- --nocapture 2>&1 | tee ci-reports/test53-multiedit/export.log
+          cargo test --locked -p solidcraft-engine --lib cmd::drawing_view::tests -- --nocapture 2>&1 | tee ci-reports/test53-multiedit/view.log
+          for name in w23a_t53_three_resizes_keep_both_dimensions_and_survive_reopen w23a_t53_two_independent_resizes_undo_redo_and_reopen; do
+            grep -Fq "::${name} ... ok" ci-reports/test53-multiedit/dimension.log
+          done
+          grep -Fq 'test result: ok. 29 passed; 0 failed;' ci-reports/test53-multiedit/dimension.log
+          grep -Fq 'test result: ok. 5 passed; 0 failed;' ci-reports/test53-multiedit/export.log
+          grep -Fq 'test result: ok. 39 passed; 0 failed;' ci-reports/test53-multiedit/view.log
+          echo TEST53_WINDOWS_DISTINCT_PASS=73 ORIGINAL=71 NEW_RUNNER_ONLY=2 FAIL=0 | tee ci-reports/test53-multiedit/summary.txt
+          echo FULL_U2_UI_E2E_NOT_RUN | tee -a ci-reports/test53-multiedit/summary.txt
+
+      - name: Publish actual original results
+        if: always()
+        shell: bash
+        run: |
+          echo "PINNED_ORIGINAL_PR_HEAD=c86b7a4c233d4903ded52ac155b1f0ee82abd79c"
+          echo "TWO_EXTRA_TESTS_STAGED_ONLY_IN_RUNNER_WORKTREE"
+          for f in solidcraft/ci-reports/test53-multiedit/{dimension,export,view}.log; do
+            echo "--- $f"
+            grep 'test result:' "$f" 2>/dev/null || true
+          done
+          cat solidcraft/ci-reports/test53-multiedit/summary.txt 2>/dev/null || true
+
+      - name: Archive runner-only Rust test source and original logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-test53-multiedit-runner-only
+          path: solidcraft/ci-reports/test53-multiedit/
+          retention-days: 14
+          if-no-files-found: warn
