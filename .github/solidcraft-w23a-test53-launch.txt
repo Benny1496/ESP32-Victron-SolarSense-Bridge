@@ -1,1 +1,3 @@
 Test 53 runner-only multi-edit Rust acceptance cases on exact reviewed SolidCraft PR #8288 HEAD c86b7a4c233d4903ded52ac155b1f0ee82abd79c. Two extra tests run in the temporary Windows runner checkout only, never committed to SolidCraft.
+
+Retry Test 53 / workflow preflight fix 5a3ca204024164ca1f4d2a5b7006a7fc5a325a42: preserve one clean-tree check before creating ci-reports. Prior run 41294773835 failed before compiling Rust. No changes to SolidCraft PR.
