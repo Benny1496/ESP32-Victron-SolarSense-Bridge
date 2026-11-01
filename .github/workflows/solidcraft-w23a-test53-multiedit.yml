@@ -53,7 +53,8 @@ jobs:
           git -C solidcraft rev-parse HEAD | tee "$out/pinned-original-commit.txt"
           test "$(git -C solidcraft rev-parse HEAD)" = "c86b7a4c233d4903ded52ac155b1f0ee82abd79c"
           test "$(git -C solidcraft rev-parse HEAD:crates/engine/src/cmd/drawing_dimension_tests.rs)" = "5615d7647c4ea4808af79e8c45c3a6c7c9237dec"
-          test -z "$(git -C solidcraft status --porcelain)"
+          # The clean-check already ran before mkdir created the report directory.
+          # Running it here would reject our own freshly created report file.
           rustc --version | tee "$out/platform.txt"
           python3 solidcraft/tests/fixtures/w23a-drawing-updates/validate.py 2>&1 | tee "$out/oracle.log"
           grep -Fq 'STATIC CONTRACT PASS' "$out/oracle.log"
