@@ -1,0 +1,1 @@
+Test 53 runner-only multi-edit Rust acceptance cases on exact reviewed SolidCraft PR #8288 HEAD c86b7a4c233d4903ded52ac155b1f0ee82abd79c. Two extra tests run in the temporary Windows runner checkout only, never committed to SolidCraft.
