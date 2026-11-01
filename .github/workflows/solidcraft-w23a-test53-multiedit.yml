@@ -47,6 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -z "$(git -C solidcraft status --porcelain)"
           mkdir -p solidcraft/ci-reports/test53-multiedit
           out=solidcraft/ci-reports/test53-multiedit
           git -C solidcraft rev-parse HEAD | tee "$out/pinned-original-commit.txt"
