@@ -1,0 +1,1 @@
+Test 54 independent Ubuntu 24.04 validation of CamWight SolidCraft PR #10881, pinned c3f8cf333e80dbc289defb804752056736924fde. Run actual W23-2 and W23-5 native export tests, no modifications to PR #8288 or production HA.
