@@ -1,0 +1,109 @@
+# Independent Ubuntu check of CamWight W23-2 / W23-5 PR #10881.
+# Read-only SolidCraft checkout. This workflow is hosted in the external ESP32 runner repository.
+name: SolidCraft Test 54 CamWight W23-2 W23-5 Linux
+on:
+  push:
+    paths:
+      - '.github/solidcraft-w23a-test54-launch.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidcraft-test54-w23-linux
+  cancel-in-progress: false
+
+jobs:
+  w23-independent-linux:
+    name: Linux W23-2 model updates and W23-5 occurrence refs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+      RUST_BACKTRACE: '1'
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - name: Checkout pinned CamWight PR 10881 HEAD
+        uses: actions/checkout@v4
+        with:
+          repository: CamWight/solidcraft
+          ref: c3f8cf333e80dbc289defb804752056736924fde
+          path: solidcraft
+          persist-credentials: false
+
+      - name: Install pinned Rust compiler
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+          components: rustfmt
+
+      - name: Restore separate Ubuntu build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: solidcraft
+          key: solidcraft-w23-10881-linux-test54
+
+      - name: Verify source and new W23-2/W23-5 cases without modifying it
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_OS" = Linux
+          test "$(git -C solidcraft rev-parse HEAD)" = "c3f8cf333e80dbc289defb804752056736924fde"
+          test "$(git -C solidcraft rev-parse HEAD:crates/engine/src/cmd/drawing_export_tests.rs)" = "d8dff3a0ed92b421640b3a5d399766bba4d32c06"
+          test "$(git -C solidcraft rev-parse HEAD:examples/acceptance/drawing_m2.json)" = "6d613c668520d93796391379f3647cabd65c3d84"
+          test -z "$(git -C solidcraft status --porcelain)"
+          grep -Fq 'fn the_milestone_plate_follows_its_model_and_undo_brings_its_sheet_back()' solidcraft/crates/engine/src/cmd/drawing_export_tests.rs
+          grep -Fq 'fn an_assembly_sheet_follows_its_occurrences()' solidcraft/crates/engine/src/cmd/drawing_export_tests.rs
+          mkdir -p solidcraft/ci-reports/test54-w23
+          {
+            echo "SOLIDCRAFT_PR=https://github.com/tangency-labs/solidcraft/pull/10881"
+            echo "SOLIDCRAFT_SOURCE_SHA=c3f8cf333e80dbc289defb804752056736924fde"
+            echo "SOURCE_BLOB=d8dff3a0ed92b421640b3a5d399766bba4d32c06"
+            echo "RUNNER_OS=$RUNNER_OS"
+            uname -a
+            rustc --version
+            cargo --version
+          } | tee solidcraft/ci-reports/test54-w23/source.txt
+          echo TEST54_PINNED_CAMWIGHT_SOURCE_PASS | tee solidcraft/ci-reports/test54-w23/preflight.txt
+
+      - name: Check code formatting
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check 2>&1 | tee ci-reports/test54-w23/rustfmt.log
+
+      - name: Build once and execute W23 export integration suite on Linux
+        working-directory: solidcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM 75m bash -eo pipefail -c '
+            cargo test --locked -p solidcraft-engine --lib --no-run 2>&1 | tee ci-reports/test54-w23/build.log
+            cargo test --locked -p solidcraft-engine --lib cmd::drawing_export::tests -- --nocapture 2>&1 | tee ci-reports/test54-w23/export.log
+          '
+          grep -Fq '::the_milestone_plate_follows_its_model_and_undo_brings_its_sheet_back ... ok' ci-reports/test54-w23/export.log
+          grep -Fq '::an_assembly_sheet_follows_its_occurrences ... ok' ci-reports/test54-w23/export.log
+          grep -Fq 'test result: ok. 7 passed; 0 failed;' ci-reports/test54-w23/export.log
+          echo TEST54_W23_PR10881_LINUX_EXPORT_PASS=7 FAIL=0 | tee ci-reports/test54-w23/summary.txt
+          echo 'NEW_W23_2_W23_5_CASES_PASS=2' | tee -a ci-reports/test54-w23/summary.txt
+          echo 'NATIVE_ENGINE_ONLY_FULL_U2_UI_E2E_NOT_RUN' | tee -a ci-reports/test54-w23/summary.txt
+
+      - name: Show original test evidence
+        if: always()
+        shell: bash
+        run: |
+          echo "TEST54_SOLIDCRAFT_SOURCE_SHA=c3f8cf333e80dbc289defb804752056736924fde"
+          grep -E 'the_milestone_plate_follows_its_model_and_undo_brings_its_sheet_back|an_assembly_sheet_follows_its_occurrences|test result:' solidcraft/ci-reports/test54-w23/export.log 2>/dev/null || true
+          cat solidcraft/ci-reports/test54-w23/summary.txt 2>/dev/null || true
+
+      - name: Archive actual report files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidcraft-test54-camwight-w23-linux
+          path: solidcraft/ci-reports/test54-w23/
+          retention-days: 14
+          if-no-files-found: warn
